@@ -18,7 +18,7 @@ function makeRaum(opt) {
   // Flüchtiger Zustand im aktuellen System
   let sys, ast, pir, bul, pick, mines, wracks, parts, station, flare, build, cam = { x: 0, y: 0 }, starsBg;
   let mode = 'flug', dockT = null, dockRow = 0, karteSel = 0, sprung = null, totT = 0, banner = null, shield = w.schild, noDmg = 9, fireCd = 0, blitz = [];
-  let netzSel = 0, netzTop = 0, saveT = 0, spawnT = 0, astT = 0, hint = '', hintT = 0, fullT = 0, t = 0, shake = 0;
+  let flamme = false, netzSel = 0, netzTop = 0, saveT = 0, spawnT = 0, astT = 0, hint = '', hintT = 0, fullT = 0, t = 0, shake = 0;
   const rep = makeRepeater(0.3, 0.09);
 
   const log = (text, col = '#e8e2ff') => { S.log.push({ t: S.time, text, col }); if (S.log.length > 40) S.log.shift(); };
@@ -261,15 +261,22 @@ function makeRaum(opt) {
     if (pressed.use) { const z = dockZiel(); if (z) { if (Math.hypot(sh.vx, sh.vy) > 140) say('Zu schnell zum Andocken. Bremsen mit ↓.'); else { mode = 'dock'; dockT = z; dockRow = 0; Klang.tone(520, 0.15); return; } } else say('Hier ist nichts zum Andocken. Flieg nah an einen Planeten oder Klon.'); }
     if (pressed.build) replizieren();
     // Steuerung
-    const turn = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    sh.a += turn * w.dreh * dt;
-    if (keys.up) { sh.vx += Math.cos(sh.a) * w.schub * dt; sh.vy += Math.sin(sh.a) * w.schub * dt; if (Math.random() < 0.8) parts.push({ x: sh.x - Math.cos(sh.a) * 16, y: sh.y - Math.sin(sh.a) * 16, vx: -Math.cos(sh.a + (Math.random() - 0.5) * 0.5) * 120 + sh.vx, vy: -Math.sin(sh.a + (Math.random() - 0.5) * 0.5) * 120 + sh.vy, life: 0.35, col: '#ffb070' }); }
-    if (keys.down) { sh.vx *= 1 - 2 * dt; sh.vy *= 1 - 2 * dt; }
+    // Joystick (Touch): Die Sonde dreht sich in die Schubrichtung, Schub wächst mit dem Ausschlag
+    const st = opt.stick && opt.stick(), analog = st && st.on && Math.hypot(st.x, st.y) > 0.2;
+    let schub = keys.up ? 1 : 0;
+    if (analog) {
+      const m = Math.min(1, Math.hypot(st.x, st.y)), da = ((Math.atan2(st.y, st.x) - sh.a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      sh.a += clamp(da, -w.dreh * 1.6 * dt, w.dreh * 1.6 * dt);
+      schub = Math.abs(da) < 1.1 ? clamp((m - 0.3) / 0.6, 0, 1) * (1 - Math.abs(da) / 1.6) : 0;
+    } else sh.a += ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * w.dreh * dt;
+    flamme = schub > 0.05;
+    if (schub > 0) { sh.vx += Math.cos(sh.a) * w.schub * schub * dt; sh.vy += Math.sin(sh.a) * w.schub * schub * dt; if (Math.random() < 0.8 * schub) parts.push({ x: sh.x - Math.cos(sh.a) * 16, y: sh.y - Math.sin(sh.a) * 16, vx: -Math.cos(sh.a + (Math.random() - 0.5) * 0.5) * 120 + sh.vx, vy: -Math.sin(sh.a + (Math.random() - 0.5) * 0.5) * 120 + sh.vy, life: 0.35, col: '#ffb070' }); }
+    if (keys.down && !analog) { sh.vx *= 1 - 2 * dt; sh.vy *= 1 - 2 * dt; }
     sh.vx *= 1 - 0.12 * dt; sh.vy *= 1 - 0.12 * dt;
     // Schwerkraft des Sterns
     const d = Math.hypot(sh.x, sh.y), loch = sys.special === 'loch', g = (loch ? 5e6 : 2e6) / Math.max(d * d, Math.pow(loch ? 120 : sys.sr * 2.5, 2));
     // Ohne Steuereingaben hält die Lageregelung die Sonde gegen die Schwerkraft und bremst sanft
-    const idle = !keys.up && !keys.down && !keys.left && !keys.right;
+    const idle = !analog && !keys.up && !keys.down && !keys.left && !keys.right;
     if (!idle) { sh.vx -= sh.x / d * g * dt; sh.vy -= sh.y / d * g * dt; } else { sh.vx *= 1 - 0.5 * dt; sh.vy *= 1 - 0.5 * dt; }
     const v = Math.hypot(sh.vx, sh.vy), vm = w.vmax * (sys.special === 'loch' && d < 400 ? 1.6 : 1); if (v > vm) { sh.vx *= vm / v; sh.vy *= vm / v; }
     sh.x += sh.vx * dt; sh.y += sh.vy * dt;
@@ -593,7 +600,7 @@ function makeRaum(opt) {
     // Die Sonde
     if (mode !== 'tot') {
       const sh = S.ship;
-      if (keys.up && mode === 'flug') { c.fillStyle = 'rgba(255,170,90,0.5)'; c.beginPath(); c.arc(sh.x + ox - Math.cos(sh.a) * 18, sh.y + oy - Math.sin(sh.a) * 18, 5 + Math.random() * 3, 0, 7); c.fill(); }
+      if (flamme && mode === 'flug') { c.fillStyle = 'rgba(255,170,90,0.5)'; c.beginPath(); c.arc(sh.x + ox - Math.cos(sh.a) * 18, sh.y + oy - Math.sin(sh.a) * 18, 5 + Math.random() * 3, 0, 7); c.fill(); }
       drawShip(c, sh.x + ox, sh.y + oy, sh.a, 1.25);
       if (noDmg < 0.4 && shield > 0) { c.strokeStyle = `rgba(120,200,255,${0.8 - noDmg * 2})`; c.lineWidth = 2; c.beginPath(); c.arc(sh.x + ox, sh.y + oy, 22, 0, 7); c.stroke(); }
       if (build) { c.strokeStyle = '#7dffb0'; c.lineWidth = 3; c.beginPath(); c.arc(sh.x + ox, sh.y + oy, 30, -Math.PI / 2, -Math.PI / 2 + build.t / build.T * Math.PI * 2); c.stroke(); }

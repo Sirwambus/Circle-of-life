@@ -77,14 +77,17 @@
   .play > .stage { width: 100%; }
   .play > .stage.kreis { max-width: 720px; }
   .ctl { display: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; --b: 52px; }
-  .dpad { display: grid; grid-template-columns: repeat(3, var(--b)); grid-template-rows: repeat(3, var(--b)); gap: 4px; }
+  /* Joystick: Grundkreis mit beweglichem Knopf */
+  .stick { position: relative; width: calc(var(--b) * 3.1); height: calc(var(--b) * 3.1); border-radius: 50%; pointer-events: auto; touch-action: none;
+    background: radial-gradient(circle, rgba(255,255,255,0.06) 0 55%, rgba(255,255,255,0.12) 56% 58%, rgba(26,28,35,0.35) 59%); border: 1px solid rgba(255,255,255,0.18); }
+  .stick .knob { position: absolute; left: 50%; top: 50%; width: calc(var(--b) * 1.25); height: calc(var(--b) * 1.25); margin: calc(var(--b) * -0.625) 0 0 calc(var(--b) * -0.625);
+    border-radius: 50%; background: rgba(235,231,222,0.35); border: 1px solid rgba(255,255,255,0.45); box-shadow: 0 0 18px rgba(255,255,255,0.15); pointer-events: none; }
+  .stick.on .knob { background: rgba(242,184,75,0.6); border-color: rgba(255,220,150,0.9); }
   .ctl button {
     font: 600 18px var(--mono); color: var(--fg); background: var(--panel); padding: 0;
     border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 8px; touch-action: none;
   }
   .ctl button.on { background: var(--line); }
-  .dpad [data-k="up"] { grid-area: 1 / 2; } .dpad [data-k="left"] { grid-area: 2 / 1; }
-  .dpad [data-k="right"] { grid-area: 2 / 3; } .dpad [data-k="down"] { grid-area: 3 / 2; }
   .acts { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; gap: 8px; align-items: center; }
   .acts [data-k="action"] { grid-area: 1 / 2 / 3 / 3; width: calc(var(--b) * 1.45); height: calc(var(--b) * 1.45); border-radius: 50%; background: var(--accent); color: #1a1408; border-color: #b9862c; }
   .acts .small { width: calc(var(--b) * 0.8); height: calc(var(--b) * 0.7); font-size: 14px; }
@@ -98,6 +101,7 @@
   @media (pointer: coarse) {
     html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
     body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    html, body, body * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     .wrap { padding: 0; max-width: none; display: block; }
     .top { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); display: block; }
     .top h1, .tag { display: none; }
@@ -116,7 +120,7 @@
     .ctl button { pointer-events: auto; background: rgba(26, 28, 35, 0.42); border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
     .ctl button.on { background: rgba(255,255,255,0.28); }
     .ctl .acts [data-k="action"] { background: rgba(242, 184, 75, 0.78); color: #1a1408; border-color: rgba(185,134,44,0.9); }
-    .ctl-l { left: max(12px, env(safe-area-inset-left, 0px)); }
+    .ctl-l { left: max(16px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
     .ctl-r { right: max(12px, env(safe-area-inset-right, 0px)); flex-direction: column; align-items: flex-end; gap: 8px; }
     .side .sbtns { display: none !important; }
     /* Info-Blatt */
@@ -163,10 +167,7 @@
 
   <div class="play">
     <div class="ctl ctl-l" aria-hidden="true">
-      <div class="dpad">
-        <button data-k="up">▲</button><button data-k="left">◀</button>
-        <button data-k="right">▶</button><button data-k="down">▼</button>
-      </div>
+      <div class="stick" id="stick"><div class="knob"></div></div>
     </div>
     <div class="stage kreis" id="stage">
       <canvas id="map" width="1440" height="1440" aria-label="Kreis der Spiele"></canvas>
@@ -335,6 +336,38 @@ const KEYMAP = {
 };
 function press(k) { if (!keys[k]) pressed[k] = true; keys[k] = true; }
 function release(k) { keys[k] = false; }
+// Langes Drücken soll kein Menü (Kopieren, Einsetzen, Lupe) öffnen
+addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('selectstart', e => e.preventDefault());
+// Joystick für Touch: liefert stick.x/y (–1 … 1) für den Raumflug und drückt für alle Spiele die Pfeiltasten
+const stick = { on: false, x: 0, y: 0 };
+(() => {
+  const el = document.getElementById('stick'), knob = el.firstElementChild, held = new Set();
+  let id = null;
+  function keysFor(x, y) {
+    const want = new Set(), m = Math.hypot(x, y);
+    if (m > 0.32) { // 8 Richtungen, die Schrägen sind schmaler als die geraden Richtungen
+      const a = Math.atan2(y, x) * 180 / Math.PI, near = t => Math.abs(((a - t + 540) % 360) - 180);
+      if (near(0) < 60) want.add('right'); if (near(180) < 60) want.add('left'); if (near(90) < 60) want.add('down'); if (near(-90) < 60) want.add('up');
+    }
+    for (const k of [...held]) if (!want.has(k)) { release(k); held.delete(k); }
+    for (const k of want) if (!held.has(k)) { press(k); held.add(k); }
+  }
+  function move(e) {
+    const r = el.getBoundingClientRect(), R = r.width / 2;
+    let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R); const d = Math.hypot(dx, dy), max = R * 0.62;
+    if (d > max) { dx *= max / d; dy *= max / d; }
+    stick.x = dx / max; stick.y = dy / max;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`; keysFor(stick.x, stick.y);
+  }
+  function end() { id = null; stick.on = false; stick.x = stick.y = 0; knob.style.transform = ''; el.classList.remove('on'); keysFor(0, 0); }
+  el.addEventListener('pointerdown', e => { e.preventDefault(); id = e.pointerId; el.setPointerCapture?.(e.pointerId); stick.on = true; el.classList.add('on'); move(e); });
+  el.addEventListener('pointermove', e => { if (e.pointerId === id) move(e); });
+  el.addEventListener('pointerup', e => { if (e.pointerId === id) end(); });
+  el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', () => { if (id !== null) end(); });
+  for (const t of document.querySelectorAll('.ctl')) t.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+  cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+})();
 addEventListener('keydown', e => { const k = KEYMAP[e.code]; if (k) { press(k); e.preventDefault(); } });
 addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) release(k); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -948,7 +981,7 @@ $('btnInfo').addEventListener('click', () => { document.body.classList.toggle('i
 
 /* ---------- Die Sonde im All ---------- */
 const skillOf = id => GAMES.reduce((a, g, i) => a + (g.cat === id ? doneOf(i) : 0), 0);
-const raum = makeRaum({ cats: CATS, skill: skillOf, onKreis: () => showMap() });
+const raum = makeRaum({ cats: CATS, skill: skillOf, onKreis: () => showMap(), stick: () => stick });
 let raumUiT = 0;
 function sondeUi(on) { document.body.classList.toggle('raum', on); $('sondeBtns').hidden = !on; $('slog').hidden = !on; $('snetz').hidden = !on; }
 function showRaum() {
