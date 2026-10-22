@@ -7,6 +7,8 @@
 function makeRaum(opt) {
   const G = makeGalaxie(), SYS = G.systems, TOTAL = SYS.length;
   const SAVE = 'tueren.sonde';
+  // Sichtfeld: im Vollbild breiter oder höher als 640 × 400; L, R, U = Ränder, die die Touch-Steuerung verdeckt
+  let W = 640, H = 400, L = 0, R = 0, U = 0, TL = 0, TT = 0;
   let S = null;
   try { S = JSON.parse(localStorage.getItem(SAVE)); } catch (e) {}
   if (!S || S.v !== 1) S = sondeNeu();
@@ -47,8 +49,8 @@ function makeRaum(opt) {
       Object.assign(S.ship, { x: Math.cos(a) * 1450, y: Math.sin(a) * 1450, vx: 0, vy: 0, a: a + Math.PI });
     }
     for (let k = 0; k < Math.ceil(piratenQuota() / 2); k++) neuerPirat(R);
-    starsBg = [0.15, 0.35, 0.6].map((par, L) => Array.from({ length: 70 }, () => ({ x: R() * 1400, y: R() * 900, s: 0.6 + R() * (L + 1) * 0.6, par, c: R() })));
-    starsBg.nebel = Array.from({ length: 5 }, () => ({ x: R() * 1400, y: R() * 900, r: 220 + R() * 300, h: Math.floor(R() * 360) }));
+    starsBg = [0.15, 0.35, 0.6].map((par, k) => Array.from({ length: 160 }, () => ({ x: R() * 1800, y: R() * 1800, s: 0.6 + R() * (k + 1) * 0.6, par, c: R() })));
+    starsBg.nebel = Array.from({ length: 8 }, () => ({ x: R() * 1800, y: R() * 1800, r: 220 + R() * 300, h: Math.floor(R() * 360) }));
     cam.x = S.ship.x; cam.y = S.ship.y; spawnT = 12;
     if (sys.special === 'loch') say('Schwarzes Loch! Halte Abstand vom Zentrum.', 4);
     else if (sys.special === 'minen') say('Minenfeld! Minen jagen dich, wenn du ihnen zu nahe kommst.', 4);
@@ -486,18 +488,18 @@ function makeRaum(opt) {
     label(c, SONDE_ROLLEN[n.rolle].name, x, y + 44, 'rgba(255,255,255,0.6)', 'center', 9);
   }
   function drawWelt(c) {
-    const ox = W / 2 - cam.x + (Math.random() - 0.5) * shake * 6, oy = H / 2 - cam.y + (Math.random() - 0.5) * shake * 6;
+    const ox = W / 2 - cam.x + (Math.random() - 0.5) * shake * 6, oy = (H - U) / 2 - cam.y + (Math.random() - 0.5) * shake * 6;
     const nebel = sys.special === 'nebel';
     // Hintergrund
     const bg = c.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 480); bg.addColorStop(0, nebel ? '#1a1030' : '#0b0a1e'); bg.addColorStop(1, '#020208');
     c.fillStyle = bg; c.fillRect(0, 0, W, H);
     for (const nb of starsBg.nebel) {
-      const x = ((nb.x - cam.x * 0.1) % 1400 + 1400) % 1400 - 380, y = ((nb.y - cam.y * 0.1) % 900 + 900) % 900 - 250;
+      const x = ((nb.x - cam.x * 0.1) % 1800 + 1800) % 1800 - 400, y = ((nb.y - cam.y * 0.1) % 1800 + 1800) % 1800 - 400;
       const gr = c.createRadialGradient(x, y, 0, x, y, nb.r); gr.addColorStop(0, `hsla(${nb.h},80%,55%,${nebel ? 0.22 : 0.09})`); gr.addColorStop(1, 'hsla(0,0%,0%,0)');
       c.fillStyle = gr; c.fillRect(x - nb.r, y - nb.r, nb.r * 2, nb.r * 2);
     }
     for (const layer of starsBg) for (const s of layer) {
-      const x = ((s.x - cam.x * s.par) % 1400 + 1400) % 1400 - 380, y = ((s.y - cam.y * s.par) % 900 + 900) % 900 - 250;
+      const x = ((s.x - cam.x * s.par) % 1800 + 1800) % 1800 - 400, y = ((s.y - cam.y * s.par) % 1800 + 1800) % 1800 - 400;
       if (x < 0 || y < 0 || x > W || y > H) continue;
       c.fillStyle = s.c < 0.15 ? '#ffd8a8' : s.c < 0.3 ? '#a8c8ff' : '#ffffff'; c.globalAlpha = 0.4 + 0.5 * Math.sin(t * 2 + s.x); c.fillRect(x, y, s.s, s.s);
     }
@@ -603,16 +605,16 @@ function makeRaum(opt) {
     label(c, `${name} ${Math.ceil(v)}/${max}`, x, y - 3, 'rgba(255,255,255,0.75)', 'left', 9);
   }
   function drawHud(c) {
-    bar(c, 14, 20, 110, S.ship.hull, 100, '#ff8fb0', 'Hülle'); bar(c, 14, 40, 110, shield, w.schild, '#7ab8ff', 'Schild'); bar(c, 14, 60, 110, S.fuel, w.tank, '#ffd23f', 'Treibstoff');
-    label(c, `${Math.floor(S.credits)} Credits`, W - 14, 22, '#ffd86b', 'right', 12);
-    label(c, `Fracht ${cargoUsed()} / ${w.fracht}`, W - 14, 38, cargoUsed() >= w.fracht ? '#ff8f7a' : 'rgba(255,255,255,0.75)', 'right', 10);
-    label(c, `Netz ${netzSysteme()} / ${TOTAL}`, W - 14, 52, '#7dffb0', 'right', 10);
-    label(c, `Waffe: ${waffe().name}` + (waffenFrei().length > 1 ? ' (Q)' : ''), 14, 82, waffe().farbe, 'left', 9);
+    bar(c, TL + 14, TT + 20, 110, S.ship.hull, 100, '#ff8fb0', 'Hülle'); bar(c, TL + 14, TT + 40, 110, shield, w.schild, '#7ab8ff', 'Schild'); bar(c, TL + 14, TT + 60, 110, S.fuel, w.tank, '#ffd23f', 'Treibstoff');
+    label(c, `${Math.floor(S.credits)} Credits`, W - 14, TT + 22, '#ffd86b', 'right', 12);
+    label(c, `Fracht ${cargoUsed()} / ${w.fracht}`, W - 14, TT + 38, cargoUsed() >= w.fracht ? '#ff8f7a' : 'rgba(255,255,255,0.75)', 'right', 10);
+    label(c, `Netz ${netzSysteme()} / ${TOTAL}`, W - 14, TT + 52, '#7dffb0', 'right', 10);
+    label(c, `Waffe: ${waffe().name}` + (waffenFrei().length > 1 ? ' (Q)' : ''), TL + 14, TT + 82, waffe().farbe, 'left', 9);
     const gefahr = sys.special === 'nest' && !S.nestDown ? 'Piratennest' : ['sicher', 'Gefahr ●', 'Gefahr ●●', 'Gefahr ●●●'][sys.danger];
-    label(c, sys.name.toUpperCase(), W / 2, 20, '#ffffff', 'center', 13);
-    label(c, gefahr + (piratenQuota() === 0 && sys.danger ? ' · bewacht' : ''), W / 2, 34, sys.danger ? '#ff8f7a' : '#7dffb0', 'center', 9);
+    label(c, sys.name.toUpperCase(), W / 2, TT + 20, '#ffffff', 'center', 13);
+    label(c, gefahr + (piratenQuota() === 0 && sys.danger ? ' · bewacht' : ''), W / 2, TT + 34, sys.danger ? '#ff8f7a' : '#7dffb0', 'center', 9);
     // Radar
-    const rx = W - 62, ry = H - 62, rr = 48, range = w.radar * (sys.special === 'nebel' ? 0.5 : 1), k = rr / range, sh = S.ship;
+    const rx = W - R - 62, ry = H - U - 62, rr = 48, range = w.radar * (sys.special === 'nebel' ? 0.5 : 1), k = rr / range, sh = S.ship;
     c.fillStyle = 'rgba(10,20,30,0.6)'; c.strokeStyle = 'rgba(120,200,255,0.4)'; c.lineWidth = 1; c.beginPath(); c.arc(rx, ry, rr, 0, 7); c.fill(); c.stroke();
     const dot = (x, y, col, s = 2) => { const dx = (x - sh.x) * k, dy = (y - sh.y) * k; if (dx * dx + dy * dy < rr * rr) { c.fillStyle = col; c.fillRect(rx + dx - s / 2, ry + dy - s / 2, s, s); } };
     dot(0, 0, sys.farbe, 5); for (const p of sys.planets) { const q = planetPos(p); dot(q.x, q.y, p.market ? '#ffe9a8' : '#8a8aa0', 3); }
@@ -622,10 +624,10 @@ function makeRaum(opt) {
     // Hinweise
     const z = mode === 'flug' ? dockZiel() : null;
     let tip = hintT > 0 ? hint : z ? `E: andocken · ${dockLabel(z)}` : build ? `Replikator ${Math.floor(build.t / build.T * 100)} %` : '';
-    if (tip) { c.font = '600 11px "IBM Plex Mono", monospace'; const tw = c.measureText(tip).width; c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(W / 2 - tw / 2 - 10, H - 92, tw + 20, 20); label(c, tip, W / 2, H - 78, '#ffffff', 'center', 11); }
+    if (tip) { c.font = '600 11px "IBM Plex Mono", monospace'; const tw = c.measureText(tip).width; c.fillStyle = 'rgba(0,0,0,0.55)'; const tx = L + (W - L - R) / 2; c.fillRect(tx - tw / 2 - 10, H - U - 92, tw + 20, 20); label(c, tip, tx, H - U - 78, '#ffffff', 'center', 11); }
     // Logbuch
     const recent = S.log.filter(e => S.time - e.t < 14).slice(-4);
-    recent.forEach((e, i) => { c.globalAlpha = clamp((14 - (S.time - e.t)) / 2, 0, 1); label(c, e.text.length > 78 ? e.text.slice(0, 77) + '…' : e.text, 14, H - 14 - (recent.length - 1 - i) * 13, e.col, 'left', 9); });
+    recent.forEach((e, i) => { c.globalAlpha = clamp((14 - (S.time - e.t)) / 2, 0, 1); const max = Math.floor((W - L - R - 100) / 5.6); label(c, e.text.length > max ? e.text.slice(0, max - 1) + '…' : e.text, L + 14, H - U - 14 - (recent.length - 1 - i) * 13, e.col, 'left', 9); });
     c.globalAlpha = 1;
     if (banner) { c.globalAlpha = clamp(banner.t, 0, 1); c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(0, 80, W, 54); label(c, banner.title, W / 2, 103, '#ffd86b', 'center', 15); label(c, banner.text, W / 2, 122, '#ffffff', 'center', 11); c.globalAlpha = 1; }
   }
@@ -698,9 +700,17 @@ function makeRaum(opt) {
     label(c, `STERNENKARTE · Netz ${netzSysteme()} von ${TOTAL} Systemen · Treibstoff ${Math.floor(S.fuel)}`, 14, 18, '#ffd86b', 'left', 11);
     if (hintT > 0) label(c, hint, W / 2, H - 66, '#ff8f7a', 'center', 11);
   }
-  function draw(c) {
-    if (mode === 'karte') { drawWelt(c); drawKarte(c); return; }
-    if (mode === 'netz') { drawWelt(c); drawNetz(c); return; }
+  // Fenster (Karte, Netz, Andocken) bleiben 640 × 400 groß und stehen mittig im Sichtfeld
+  function fenster(c, fn, dunkel) {
+    const vw = W, vh = H, vl = L, vr = R, vu = U, vtl = TL, vtt = TT;
+    if (dunkel) { c.fillStyle = 'rgba(3,2,12,0.94)'; c.fillRect(0, 0, vw, vh); }
+    c.save(); c.translate((vw - 640) / 2, Math.max(0, (vh - vu - 400) / 2)); W = 640; H = 400; L = R = U = TL = TT = 0;
+    fn(c); c.restore(); W = vw; H = vh; L = vl; R = vr; U = vu; TL = vtl; TT = vtt;
+  }
+  function draw(c, v = {}) {
+    W = v.w || 640; H = v.h || 400; L = v.l || 0; R = v.r || 0; U = v.b || 0; TL = v.tl || 0; TT = v.tt || 0;
+    if (mode === 'karte') { drawWelt(c); fenster(c, drawKarte, true); return; }
+    if (mode === 'netz') { drawWelt(c); fenster(c, drawNetz, true); return; }
     if (mode === 'sprung') {
       const k = sprung.t / 1.3; drawWelt(c);
       c.fillStyle = `rgba(4,2,16,${Math.min(1, k * 1.3)})`; c.fillRect(0, 0, W, H);
@@ -708,7 +718,7 @@ function makeRaum(opt) {
       drawShip(c, W / 2, H / 2, -Math.PI / 2, 1.4); label(c, `Sprung nach ${SYS[sprung.to].name} …`, W / 2, H - 40, '#ffffff', 'center', 13); return;
     }
     drawWelt(c); drawHud(c);
-    if (mode === 'dock') drawDock(c);
+    if (mode === 'dock') fenster(c, drawDock);
     if (mode === 'tot') { c.fillStyle = `rgba(0,0,0,${Math.min(0.7, totT / 2)})`; c.fillRect(0, 0, W, H); label(c, 'Sonde zerstört', W / 2, H / 2 - 10, '#ff8f7a', 'center', 20); if (totT > 1.5) label(c, 'Leertaste: Bewusstsein aus dem Backup laden', W / 2, H / 2 + 18, '#ffffff', 'center', 12); }
     if (mode === 'sieg') { c.fillStyle = 'rgba(0,0,0,0.65)'; c.fillRect(0, 0, W, H); label(c, 'DAS NETZ IST VOLLSTÄNDIG', W / 2, H / 2 - 16, '#ffd86b', 'center', 22); label(c, `${S.nodes.length} Klone in allen ${TOTAL} Systemen. Du bist überall.`, W / 2, H / 2 + 12, '#ffffff', 'center', 12); label(c, 'Leertaste: weiterfliegen', W / 2, H / 2 + 36, 'rgba(255,255,255,0.6)', 'center', 10); }
   }

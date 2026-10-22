@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#111217">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -45,6 +45,7 @@
     font: 600 12px var(--mono); padding: 8px 14px; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel); color: var(--fg);
   }
+  .tools button b { font-weight: 600; }
   .tools button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 18px rgba(242,184,75,0.25); }
   .tools button:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .lv { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -91,39 +92,46 @@
   .sgrid button { height: calc(var(--b) * 0.75); font-size: 13px; line-height: 1; display: grid; place-items: center; }
   .sgrid small { font-size: 8px; color: var(--muted); font-weight: 400; }
   body.raum .sgrid { display: grid; }
+  #btnInfo { display: none; }
+  /* Touch-Geräte: Das Spielbild füllt den ganzen Bildschirm, alle Bedienelemente liegen halbdurchsichtig darüber.
+     Die Texte (Regeln, Netz, Logbuch) öffnet der ⓘ-Knopf als Blatt. */
   @media (pointer: coarse) {
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
     body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-    .ctl { display: flex; }
-    .tag { display: none; }
-    .tools button { padding: 7px 11px; font-size: 11px; }
+    .wrap { padding: 0; max-width: none; display: block; }
+    .top { position: fixed; z-index: 5; top: max(8px, env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); display: block; }
+    .top h1, .tag { display: none; }
+    .tools { gap: 6px; }
+    .tools button { width: 38px; height: 38px; padding: 0; font-size: 16px; display: grid; place-items: center; background: rgba(20, 21, 28, 0.55); border-color: rgba(255,255,255,0.16); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .tools button span { display: none; }
+    #btnKlang[aria-pressed="false"] b { opacity: 0.5; }
+    #btnInfo { display: grid; }
+    .play { position: fixed; inset: 0; display: block; }
+    .play > .stage, .play > .stage.kreis { position: absolute; inset: 0; width: auto; height: auto; max-width: none; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; background: #000;
+      display: flex; align-items: center; justify-content: center; }
+    .play > .stage.kreis { background: radial-gradient(circle at center, #1a0f2e 0%, #05030b 70%); }
+    .play > .stage #game { width: 100vw; height: 100dvh; aspect-ratio: auto; }
+    .play > .stage #map { width: min(100vw, 100dvh); height: auto; aspect-ratio: 1 / 1; }
+    .ctl { display: flex; position: fixed; z-index: 4; bottom: max(12px, env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+    .ctl button { pointer-events: auto; background: rgba(26, 28, 35, 0.42); border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .ctl button.on { background: rgba(255,255,255,0.28); }
+    .ctl .acts [data-k="action"] { background: rgba(242, 184, 75, 0.78); color: #1a1408; border-color: rgba(185,134,44,0.9); }
+    .ctl-l { left: max(12px, env(safe-area-inset-left, 0px)); }
+    .ctl-r { right: max(12px, env(safe-area-inset-right, 0px)); flex-direction: column; align-items: flex-end; gap: 8px; }
     .side .sbtns { display: none !important; }
-    .play { grid-template-columns: auto 1fr auto; grid-template-areas: "stage stage stage" "l . r"; gap: 12px 8px; }
-    .play > .stage { grid-area: stage; }
-    .ctl-l { grid-area: l; } .ctl-r { grid-area: r; flex-direction: column; align-items: flex-end; gap: 10px; }
+    /* Info-Blatt */
+    .info { display: none; }
+    body.infoOpen .info { display: flex; position: fixed; z-index: 6; overflow: auto; -webkit-overflow-scrolling: touch;
+      top: calc(max(8px, env(safe-area-inset-top, 0px)) + 44px); bottom: max(12px, env(safe-area-inset-bottom, 0px));
+      left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+      padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: rgba(17, 18, 23, 0.95); align-content: start; }
+    body.infoOpen #btnInfo { border-color: var(--accent); color: var(--accent); }
   }
-  @media (pointer: coarse) and (max-width: 420px) { .ctl { --b: 48px; } }
-  /* Querformat auf Handy und Tablet: Bühne fast bildschirmhoch, Steuerkreuz links, Knöpfe rechts, Kopfleiste klein in der linken Spalte */
-  @media (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
-    .wrap { padding-block: 0 16px; gap: 10px; max-width: none; }
-    .ctl { --b: 36px; }
-    .top { position: fixed; z-index: 2; top: max(6px, env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); display: block; }
-    .top h1 { display: none; }
-    .tools { flex-direction: column; align-items: stretch; gap: 5px; width: calc(var(--b) * 3 + 8px); }
-    .tools button { padding: 5px 6px; font-size: 10px; }
-    .play { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "l stage r"; gap: 8px; min-height: 100dvh; }
-    .ctl-l { align-self: end; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
-    .ctl-r { align-self: center; }
-    .play > .stage { --frei: calc(100vw - 2 * max(16px, env(safe-area-inset-left, 0px)) - 256px); width: auto; height: min(calc(100dvh - 12px), calc(var(--frei) * 0.625)); aspect-ratio: 16 / 10; max-width: 100%; }
-    .play > .stage.kreis { aspect-ratio: 1 / 1; height: min(calc(100dvh - 12px), var(--frei)); }
-    .play > .stage canvas { width: 100%; height: 100%; }
+  @media (pointer: coarse) and (orientation: landscape) {
+    .tools { flex-direction: column; }
+    body.infoOpen .info { top: max(8px, env(safe-area-inset-top, 0px)); left: calc(max(8px, env(safe-area-inset-left, 0px)) + 50px); }
   }
-  /* Tablet quer: etwas größere Knöpfe */
-  @media (pointer: coarse) and (orientation: landscape) and (min-height: 561px) {
-    .play { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "l stage r"; }
-    .play > .stage { width: auto; height: min(calc(100dvh - 120px), calc((100vw - 420px) * 0.625)); aspect-ratio: 16 / 10; max-width: 100%; }
-    .play > .stage.kreis { aspect-ratio: 1 / 1; height: min(calc(100dvh - 120px), calc(100vw - 420px)); }
-    .play > .stage canvas { width: 100%; height: 100%; }
-  }
+  @media (pointer: coarse) and (max-height: 560px) { .ctl { --b: 42px; } .acts [data-k="action"] { width: calc(var(--b) * 1.5); height: calc(var(--b) * 1.5); } }
   .sbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .sbtns button { font: 600 11px var(--mono); padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg); touch-action: none; }
   .sbtns button.on { background: var(--line); }
@@ -146,9 +154,10 @@
       <p class="tag" id="tag">Eine Von-Neumann-Sonde. Ihr Geist trainiert im Kreis der Spiele.</p>
     </div>
     <div class="tools">
-      <button id="btnSonde" type="button" hidden>✦ Zur Sonde</button>
-      <button id="btnKreis" type="button" hidden>◎ Zum Kreis</button>
-      <button id="btnKlang" type="button" aria-pressed="false">♪ Klang an</button>
+      <button id="btnSonde" type="button" hidden><b>✦</b><span> Zur Sonde</span></button>
+      <button id="btnKreis" type="button" hidden><b>◎</b><span> Zum Kreis</span></button>
+      <button id="btnKlang" type="button" aria-pressed="false"><b>♪</b><span> Klang an</span></button>
+      <button id="btnInfo" type="button" aria-label="Infos zeigen">ⓘ</button>
     </div>
   </header>
 
@@ -311,6 +320,10 @@
 const W = 640, H = 400;
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
+// Zwischenflächen für das Vollbild auf Touch-Geräten
+const gcv = document.createElement('canvas'); gcv.width = 1280; gcv.height = 800; const gctx = gcv.getContext('2d');
+const tcv = document.createElement('canvas'); tcv.width = 32; tcv.height = 20; const tctx = tcv.getContext('2d');
+const view = { full: false, kr: 2, kg: 2, ox: 0, oy: 0, raum: { w: 640, h: 400, l: 0, r: 0, b: 0 } };
 
 /* ---------- Eingabe ---------- */
 const keys = {}, pressed = {};
@@ -920,16 +933,18 @@ function showMap() {
   $('tag').textContent = 'Der Kreis der Spiele trainiert die Sonde. Zehn Ringe: innen leicht, außen schwer.';
   Klang.setLevel(1);
   if (kreis.mode() === 'cat') { const s = kreis.sel(); renderInfo(s.g, s.l, false); } else renderCategory(kreis.cat());
+  fitView();
 }
 function startLevel(g, l) {
   gi = g; li = l; world = GAMES[g].make(catOf(GAMES[g]).color, l);
   phase = 'intro'; pt = 0;
-  stage.classList.remove('kreis'); mapCv.hidden = true; cv.hidden = false; btnKreis.hidden = false; btnKreis.textContent = '◎ Zum Kreis'; btnSonde.hidden = true; sondeUi(false);
+  stage.classList.remove('kreis'); mapCv.hidden = true; cv.hidden = false; btnKreis.hidden = false; btnKreis.lastChild.textContent = ' Zum Kreis'; btnSonde.hidden = true; sondeUi(false);
   Klang.setLevel(GAMES[g].name === 'Takt' ? 0 : 0.35);
-  renderInfo(g, l, true);
+  renderInfo(g, l, true); fitView();
 }
 btnKreis.addEventListener('click', () => { showMap(); btnKreis.blur(); });
 btnSonde.addEventListener('click', () => { showRaum(); btnSonde.blur(); });
+$('btnInfo').addEventListener('click', () => { document.body.classList.toggle('infoOpen'); $('btnInfo').blur(); });
 
 /* ---------- Die Sonde im All ---------- */
 const skillOf = id => GAMES.reduce((a, g, i) => a + (g.cat === id ? doneOf(i) : 0), 0);
@@ -938,9 +953,9 @@ let raumUiT = 0;
 function sondeUi(on) { document.body.classList.toggle('raum', on); $('sondeBtns').hidden = !on; $('slog').hidden = !on; $('snetz').hidden = !on; }
 function showRaum() {
   phase = 'raum'; stage.classList.remove('kreis'); mapCv.hidden = true; cv.hidden = false;
-  btnKreis.hidden = false; btnKreis.textContent = '◎ Kreis der Spiele'; btnSonde.hidden = true; sondeUi(true);
+  btnKreis.hidden = false; btnKreis.lastChild.textContent = ' Kreis der Spiele'; btnSonde.hidden = true; sondeUi(true);
   $('tag').textContent = 'Eine Von-Neumann-Sonde. Ihr Geist trainiert im Kreis der Spiele.';
-  Klang.setLevel(0.75); raum.enter(); renderRaum(true);
+  Klang.setLevel(0.75); raum.enter(); renderRaum(true); fitView();
 }
 function renderRaum(full) {
   const st = raum.status(), info = document.querySelector('.info'); info.style.setProperty('--cat', '#7dffb0');
@@ -963,7 +978,7 @@ function renderRaum(full) {
     .map(([a, b]) => `<kbd>${esc(a)}</kbd><span>${esc(b)}</span>`).join('');
   renderSkills();
 }
-btnKlang.addEventListener('click', () => { const on = Klang.toggle(); btnKlang.setAttribute('aria-pressed', on ? 'true' : 'false'); btnKlang.textContent = on ? '♪ Klang aus' : '♪ Klang an'; btnKlang.blur(); });
+btnKlang.addEventListener('click', () => { const on = Klang.toggle(); btnKlang.setAttribute('aria-pressed', on ? 'true' : 'false'); btnKlang.lastChild.textContent = on ? ' Klang aus' : ' Klang an'; btnKlang.blur(); });
 
 function update(dt) {
   if (phase === 'raum') { raum.update(dt); raumUiT -= dt; if (raumUiT <= 0 && phase === 'raum') { raumUiT = 0.5; renderRaum(false); } }
@@ -992,7 +1007,14 @@ function update(dt) {
 
 function draw() {
   if (phase === 'map') return kreis.draw();
-  if (phase === 'raum') { ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; return raum.draw(ctx); }
+  if (phase === 'raum') {
+    ctx.setTransform(view.kr, 0, 0, view.kr, 0, 0); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    return raum.draw(ctx, view.raum);
+  }
+  if (view.full) { drawGame(gctx); return present(); }
+  drawGame(ctx);
+}
+function drawGame(ctx) {
   ctx.setTransform(2, 0, 0, 2, 0, 0);
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   const col = catOf(GAMES[gi]).color;
@@ -1021,6 +1043,40 @@ function draw() {
   }
 }
 
+// Vollbild auf Touch-Geräten: Das Spiel (640 × 400) steht scharf im freien Bereich,
+// den Rest füllt ein weichgezeichnetes, abgedunkeltes Abbild des Spiels.
+function present() {
+  const { kg, ox, oy } = view;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = true;
+  tctx.drawImage(gcv, 0, 0, tcv.width, tcv.height);
+  ctx.drawImage(tcv, 0, 0, cv.width, cv.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(gcv, ox, oy, 640 * kg, 400 * kg);
+}
+// Größe der Zeichenfläche an den Bildschirm anpassen
+function fitView() {
+  view.full = matchMedia('(pointer: coarse)').matches;
+  if (!view.full) {
+    if (cv.width !== 1280 || cv.height !== 800) { cv.width = 1280; cv.height = 800; }
+    Object.assign(view, { kr: 2, raum: { w: 640, h: 400, l: 0, r: 0, b: 0 } }); return;
+  }
+  const dpr = Math.min(devicePixelRatio || 1, 2), iw = innerWidth, ih = innerHeight;
+  const cw = Math.round(iw * dpr), ch = Math.round(ih * dpr);
+  if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
+  const rl = document.querySelector('.ctl-l').getBoundingClientRect(), rr = document.querySelector('.ctl-r').getBoundingClientRect();
+  const quer = iw >= ih;
+  // Raumflug: Sichtfeld so breit (quer) bzw. so hoch (hoch) wie der Bildschirm
+  const kr = quer ? ch / 400 : cw / 640; view.kr = kr;
+  const toLog = px => px * dpr / kr;
+  const rt = document.querySelector('.tools').getBoundingClientRect();
+  view.raum = quer ? { w: cw / kr, h: 400, l: toLog(rl.right), r: toLog(iw - rr.left), b: 0, tl: toLog(rt.right + 4), tt: 0 }
+                   : { w: 640, h: ch / kr, l: 0, r: 0, b: toLog(ih - Math.min(rl.top, rr.top)), tl: 0, tt: toLog(rt.bottom + 4) };
+  // Spiele: im freien Bereich zentriert (hochkant über der Steuerung)
+  const top = quer ? 0 : (document.querySelector('.top').getBoundingClientRect().bottom + 6) * dpr;
+  const bottom = quer ? ch : Math.min(rl.top, rr.top) * dpr - 6 * dpr;
+  const kg = Math.min(cw / 640, (bottom - top) / 400);
+  Object.assign(view, { kg, ox: (cw - 640 * kg) / 2, oy: top + (bottom - top - 400 * kg) / 2 });
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -1028,7 +1084,9 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+addEventListener('resize', () => fitView());
 function start(data) {
+  fitView();
   // Beim ersten Besuch steht die Auswahl auf dem ersten Spiel, sonst auf dem zuletzt gewählten
   kreis.select(clamp(data?.gi ?? 0, 0, GAMES.length - 1), clamp(data?.li ?? 0, 0, LEVELS - 1));
   if (data?.cat) kreis.enterCat(CATS.findIndex(c => c.id === GAMES[data.gi].cat));
