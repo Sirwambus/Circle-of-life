@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111217">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Türen">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Türen</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  /* Layout: eine schmale Spalte – Kopf, Bühne (runder Kreis der Spiele oder Spiel-Canvas 16:10), Info-Leiste, Touch-Steuerung. Bewusst nur dunkel. */
+  :root {
+    --bg: #111217;
+    --panel: #1a1c23;
+    --line: #2b2e39;
+    --fg: #ebe7de;
+    --muted: #9b9caa;
+    --accent: #f2b84b;
+    --display: "Bungee", "Arial Black", Impact, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  [hidden] { display: none !important; }
+  body { font-family: var(--mono); }
+  .wrap {
+    max-width: 980px; margin: 0 auto;
+    padding-block: 20px 32px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 16px;
+  }
+  .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+  h1 { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5vw, 40px); margin: 0; letter-spacing: 0.02em; }
+  h1 span { color: var(--accent); }
+  .tag { margin: 0; color: var(--muted); font-size: 13px; }
+  .tools { display: flex; gap: 8px; align-items: center; }
+  .tools button {
+    font: 600 12px var(--mono); padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+  }
+  .tools button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 18px rgba(242,184,75,0.25); }
+  .tools button:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .lv { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .lv span { font: 600 11px var(--mono); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .lv span.done { color: #0d0a14; background: var(--cat, var(--accent)); border-color: transparent; }
+  .lv span.open { color: var(--cat, var(--accent)); border-color: var(--cat, var(--accent)); }
+  .side { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .skills { display: grid; grid-template-columns: auto minmax(80px, 160px) auto; gap: 5px 10px; align-items: center; font-size: 11px; color: var(--muted); }
+  .skills b { font-weight: 600; color: var(--c); white-space: nowrap; }
+  .skills i { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .skills i::after { content: ""; display: block; height: 100%; width: var(--w); background: var(--c); box-shadow: 0 0 8px var(--c); }
+  .skills em { font-style: normal; font-variant-numeric: tabular-nums; }
+  .stage { position: relative; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  canvas { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 10; touch-action: none; }
+  #map { aspect-ratio: 1 / 1; touch-action: manipulation; }
+  .stage.kreis { width: 100%; max-width: 720px; justify-self: center; border-radius: 50%; border-color: transparent; background: transparent; box-shadow: 0 0 60px rgba(150,90,255,0.18); }
+  .info { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; }
+  .info > div { min-width: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  h2 { font-family: var(--display); font-weight: 400; font-size: 22px; margin: 4px 0 6px; text-wrap: balance; }
+  #wrule { margin: 0; color: var(--muted); max-width: 60ch; line-height: 1.5; font-size: 13px; }
+  .keys { display: grid; grid-template-columns: auto auto; gap: 6px 12px; align-content: start; font-size: 12px; color: var(--muted); }
+  kbd {
+    font: 600 11px var(--mono); color: var(--fg); background: var(--panel);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 2px 6px; white-space: nowrap; justify-self: end;
+  }
+  /* Bühne mit Touch-Steuerung links und rechts (nur bei Fingerbedienung sichtbar) */
+  .play { display: grid; gap: 12px; justify-items: center; align-items: center; }
+  .play > .stage { width: 100%; }
+  .play > .stage.kreis { max-width: 720px; }
+  .ctl { display: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; --b: 52px; }
+  .dpad { display: grid; grid-template-columns: repeat(3, var(--b)); grid-template-rows: repeat(3, var(--b)); gap: 4px; }
+  .ctl button {
+    font: 600 18px var(--mono); color: var(--fg); background: var(--panel); padding: 0;
+    border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 8px; touch-action: none;
+  }
+  .ctl button.on { background: var(--line); }
+  .dpad [data-k="up"] { grid-area: 1 / 2; } .dpad [data-k="left"] { grid-area: 2 / 1; }
+  .dpad [data-k="right"] { grid-area: 2 / 3; } .dpad [data-k="down"] { grid-area: 3 / 2; }
+  .acts { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; gap: 8px; align-items: center; }
+  .acts [data-k="action"] { grid-area: 1 / 2 / 3 / 3; width: calc(var(--b) * 1.45); height: calc(var(--b) * 1.45); border-radius: 50%; background: var(--accent); color: #1a1408; border-color: #b9862c; }
+  .acts .small { width: calc(var(--b) * 0.8); height: calc(var(--b) * 0.7); font-size: 14px; }
+  .sgrid { display: none; grid-template-columns: repeat(3, calc(var(--b) * 0.9)); gap: 5px; }
+  .sgrid button { height: calc(var(--b) * 0.75); font-size: 13px; line-height: 1; display: grid; place-items: center; }
+  .sgrid small { font-size: 8px; color: var(--muted); font-weight: 400; }
+  body.raum .sgrid { display: grid; }
+  @media (pointer: coarse) {
+    body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .ctl { display: flex; }
+    .tag { display: none; }
+    .tools button { padding: 7px 11px; font-size: 11px; }
+    .side .sbtns { display: none !important; }
+    .play { grid-template-columns: auto 1fr auto; grid-template-areas: "stage stage stage" "l . r"; gap: 12px 8px; }
+    .play > .stage { grid-area: stage; }
+    .ctl-l { grid-area: l; } .ctl-r { grid-area: r; flex-direction: column; align-items: flex-end; gap: 10px; }
+  }
+  @media (pointer: coarse) and (max-width: 420px) { .ctl { --b: 48px; } }
+  /* Querformat auf Handy und Tablet: Bühne fast bildschirmhoch, Steuerkreuz links, Knöpfe rechts, Kopfleiste klein in der linken Spalte */
+  @media (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
+    .wrap { padding-block: 0 16px; gap: 10px; max-width: none; }
+    .ctl { --b: 36px; }
+    .top { position: fixed; z-index: 2; top: max(6px, env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); display: block; }
+    .top h1 { display: none; }
+    .tools { flex-direction: column; align-items: stretch; gap: 5px; width: calc(var(--b) * 3 + 8px); }
+    .tools button { padding: 5px 6px; font-size: 10px; }
+    .play { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "l stage r"; gap: 8px; min-height: 100dvh; }
+    .ctl-l { align-self: end; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+    .ctl-r { align-self: center; }
+    .play > .stage { --frei: calc(100vw - 2 * max(16px, env(safe-area-inset-left, 0px)) - 256px); width: auto; height: min(calc(100dvh - 12px), calc(var(--frei) * 0.625)); aspect-ratio: 16 / 10; max-width: 100%; }
+    .play > .stage.kreis { aspect-ratio: 1 / 1; height: min(calc(100dvh - 12px), var(--frei)); }
+    .play > .stage canvas { width: 100%; height: 100%; }
+  }
+  /* Tablet quer: etwas größere Knöpfe */
+  @media (pointer: coarse) and (orientation: landscape) and (min-height: 561px) {
+    .play { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "l stage r"; }
+    .play > .stage { width: auto; height: min(calc(100dvh - 120px), calc((100vw - 420px) * 0.625)); aspect-ratio: 16 / 10; max-width: 100%; }
+    .play > .stage.kreis { aspect-ratio: 1 / 1; height: min(calc(100dvh - 120px), calc(100vw - 420px)); }
+    .play > .stage canvas { width: 100%; height: 100%; }
+  }
+  .sbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .sbtns button { font: 600 11px var(--mono); padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg); touch-action: none; }
+  .sbtns button.on { background: var(--line); }
+  .lv span.sys { color: var(--c); border-color: var(--c); }
+  .snetz { margin-top: 14px; overflow-x: auto; }
+  .snetz table { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+  .snetz th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 12px 3px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .snetz td { padding: 3px 12px 3px 0; color: var(--fg); vertical-align: top; }
+  .snetz td.r { color: var(--c); white-space: nowrap; }
+  .snetz caption { text-align: left; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #7dffb0; padding-bottom: 6px; }
+  .slog { margin-top: 12px; display: grid; gap: 3px; font-size: 11px; line-height: 1.4; max-width: 62ch; }
+  .slog p { margin: 0; color: var(--c, var(--muted)); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div>
+      <h1>Tür<span>en</span></h1>
+      <p class="tag" id="tag">Eine Von-Neumann-Sonde. Ihr Geist trainiert im Kreis der Spiele.</p>
+    </div>
+    <div class="tools">
+      <button id="btnSonde" type="button" hidden>✦ Zur Sonde</button>
+      <button id="btnKreis" type="button" hidden>◎ Zum Kreis</button>
+      <button id="btnKlang" type="button" aria-pressed="false">♪ Klang an</button>
+    </div>
+  </header>
+
+  <div class="play">
+    <div class="ctl ctl-l" aria-hidden="true">
+      <div class="dpad">
+        <button data-k="up">▲</button><button data-k="left">◀</button>
+        <button data-k="right">▶</button><button data-k="down">▼</button>
+      </div>
+    </div>
+    <div class="stage kreis" id="stage">
+      <canvas id="map" width="1440" height="1440" aria-label="Kreis der Spiele"></canvas>
+      <canvas id="game" width="1280" height="800" aria-label="Spielfläche" hidden></canvas>
+    </div>
+    <div class="ctl ctl-r" aria-hidden="true">
+      <div class="sgrid">
+        <button data-k="use">E<small>Dock</small></button><button data-k="build">B<small>Klon</small></button><button data-k="galaxy">G<small>Karte</small></button>
+        <button data-k="netz">N<small>Netz</small></button><button data-k="weapon">Q<small>Waffe</small></button><button data-k="kreis">K<small>Kreis</small></button>
+      </div>
+      <div class="acts">
+        <button data-k="menu" class="small">◁</button>
+        <button data-k="reset" class="small">R</button>
+        <button data-k="action">A</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="info">
+    <div>
+      <span class="eyebrow" id="wnum"></span>
+      <h2 id="wname"></h2>
+      <p id="wrule"></p>
+      <div class="lv" id="levels"></div>
+      <div class="snetz" id="snetz" hidden></div>
+      <div class="slog" id="slog" hidden></div>
+    </div>
+    <div class="side">
+      <div class="sbtns" id="sondeBtns" hidden>
+        <button type="button" data-k="use">E · Andocken</button><button type="button" data-k="build">B · Replizieren</button>
+        <button type="button" data-k="galaxy">G · Sternenkarte</button><button type="button" data-k="kreis">K · Kreis</button>
+        <button type="button" data-k="weapon">Q · Waffe</button><button type="button" data-k="netz">N · Netz</button>
+      </div>
+      <div class="keys" id="wkeys"></div>
+      <div class="skills" id="skills" aria-label="Fähigkeiten"></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="welten/flur.js"></script>
+<script src="welten/sprung.js"></script>
+<script src="welten/schluessel.js"></script>
+<script src="welten/dunkelheit.js"></script>
+<script src="welten/schwerelos.js"></script>
+<script src="welten/flattern.js"></script>
+<script src="welten/schlange.js"></script>
+<script src="welten/zwillinge.js"></script>
+<script src="welten/farbwechsel.js"></script>
+<script src="welten/eisbahn.js"></script>
+<script src="welten/memory.js"></script>
+<script src="welten/ballon.js"></script>
+<script src="welten/ausbrechen.js"></script>
+<script src="welten/froschweg.js"></script>
+<script src="welten/angeln.js"></script>
+<script src="welten/stapeln.js"></script>
+<script src="welten/lichter.js"></script>
+<script src="welten/minigolf.js"></script>
+<script src="welten/schiebepuzzle.js"></script>
+<script src="welten/takt.js"></script>
+<script src="welten/waechter.js"></script>
+<script src="welten/lavaturm.js"></script>
+<script src="welten/umkehr.js"></script>
+<script src="welten/bomben.js"></script>
+<script src="welten/liane.js"></script>
+<script src="welten/laser.js"></script>
+<script src="welten/stillstand.js"></script>
+<script src="welten/bloecke.js"></script>
+<script src="welten/verteidigung.js"></script>
+<script src="welten/zeitschleife.js"></script>
+<script src="welten/blitz.js"></script>
+<script src="welten/symbolsuche.js"></script>
+<script src="welten/rechenblitz.js"></script>
+<script src="welten/farbfolge.js"></script>
+<script src="welten/sternenpfad.js"></script>
+<script src="welten/veraenderung.js"></script>
+<script src="welten/fokus.js"></script>
+<script src="welten/fangen.js"></script>
+<script src="welten/abwehr.js"></script>
+<script src="welten/sortieren.js"></script>
+<script src="welten/labyrinth.js"></script>
+<script src="welten/zahlenspanne.js"></script>
+<script src="welten/positionen.js"></script>
+<script src="welten/zurueck.js"></script>
+<script src="welten/klangschalen.js"></script>
+<script src="welten/roehren.js"></script>
+<script src="welten/balance.js"></script>
+<script src="welten/ausreisser.js"></script>
+<script src="welten/mehroderweniger.js"></script>
+<script src="welten/kartenschnipp.js"></script>
+<script src="welten/pfeilsturm.js"></script>
+<script src="welten/treppensprint.js"></script>
+<script src="welten/punktezaehlen.js"></script>
+<script src="welten/buchstabenjagd.js"></script>
+<script src="welten/wettrennen.js"></script>
+<script src="welten/slalom.js"></script>
+<script src="welten/huetchen.js"></script>
+<script src="welten/flanker.js"></script>
+<script src="welten/unterschiede.js"></script>
+<script src="welten/zaehlwerk.js"></script>
+<script src="welten/verfolgen.js"></script>
+<script src="welten/leuchtturm.js"></script>
+<script src="welten/uhrwache.js"></script>
+<script src="welten/doppelspur.js"></script>
+<script src="welten/wiedersehen.js"></script>
+<script src="welten/einkaufsliste.js"></script>
+<script src="welten/reihenfolge.js"></script>
+<script src="welten/zuordnung.js"></script>
+<script src="welten/schattenbild.js"></script>
+<script src="welten/muster.js"></script>
+<script src="welten/wegbeschreibung.js"></script>
+<script src="welten/rhythmus.js"></script>
+<script src="welten/maulwurf.js"></script>
+<script src="welten/zielscheibe.js"></script>
+<script src="welten/ausweichen.js"></script>
+<script src="welten/torwart.js"></script>
+<script src="welten/doppelblitz.js"></script>
+<script src="welten/pendel.js"></script>
+<script src="welten/pong.js"></script>
+<script src="welten/jongleur.js"></script>
+<script src="welten/zahlenreihe.js"></script>
+<script src="welten/hanoi.js"></script>
+<script src="welten/minisudoku.js"></script>
+<script src="welten/waage.js"></script>
+<script src="welten/wasserglaeser.js"></script>
+<script src="welten/mastermind.js"></script>
+<script src="welten/nonogramm.js"></script>
+<script src="welten/parkplatz.js"></script>
+<script src="welten/nachzeichnen.js"></script>
+<script src="welten/kugellabyrinth.js"></script>
+<script src="welten/bogenschiessen.js"></script>
+<script src="welten/kran.js"></script>
+<script src="welten/hoehlenflug.js"></script>
+<script src="welten/lenkdrachen.js"></script>
+<script src="welten/flipper.js"></script>
+<script src="welten/mondlandung.js"></script>
+<script src="kern/klang.js"></script>
+<script src="kern/kreis.js"></script>
+<script src="kern/sonde.js"></script>
+<script src="kern/raum.js"></script>
+<script>
+/* =====================================================================
+   TÜREN – der Kreis der Spiele
+   Jedes Spiel ist ein Objekt in WORLDS mit:
+     name, rule, notes (pro Level), keys
+     make(doorLight, level) -> { update(dt), draw(c), door(), done }   (level = 0 … LEVELS-1)
+   In CATS steht, welche Spiele zu welcher Fähigkeit gehören. Die Karte (kern/kreis.js) ordnet
+   sie als Speichen im Kreis an. Neues Spiel = Datei in welten/, <script>-Tag, Eintrag in WORLDS
+   und sein Name in einer Kategorie von CATS.
+   ===================================================================== */
+const W = 640, H = 400;
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+
+/* ---------- Eingabe ---------- */
+const keys = {}, pressed = {};
+const KEYMAP = {
+  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
+  Space: 'action', Enter: 'action', KeyR: 'reset', Escape: 'menu', KeyM: 'menu',
+  KeyE: 'use', KeyB: 'build', KeyG: 'galaxy', KeyK: 'kreis', KeyQ: 'weapon', KeyN: 'netz'
+};
+function press(k) { if (!keys[k]) pressed[k] = true; keys[k] = true; }
+function release(k) { keys[k] = false; }
+addEventListener('keydown', e => { const k = KEYMAP[e.code]; if (k) { press(k); e.preventDefault(); } });
+addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) release(k); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+document.querySelectorAll('.ctl button, .sbtns button').forEach(b => {
+  const k = b.dataset.k;
+  const on = e => { e.preventDefault(); b.setPointerCapture?.(e.pointerId); b.classList.add('on'); press(k); };
+  const off = () => { b.classList.remove('on'); release(k); };
+  b.addEventListener('pointerdown', on);
+  b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+});
+
+/* ---------- Helfer ---------- */
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const center = r => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+function rng(seed) {
+  return () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+// Bewegt ein Rechteck achsenweise und schiebt es aus festen Rechtecken heraus.
+function moveAndCollide(p, dx, dy, solids) {
+  p.x += dx;
+  for (const s of solids) if (overlap(p, s)) p.x = dx > 0 ? s.x - p.w : s.x + s.w;
+  p.y += dy;
+  for (const s of solids) if (overlap(p, s)) p.y = dy > 0 ? s.y - p.h : s.y + s.h;
+}
+// Wie weit die Tür offen steht: je näher die Spielfigur, desto weiter.
+function doorOpenness(p, door, range = 90) {
+  const a = center(p), b = center(door);
+  return clamp(1 - (Math.hypot(a.x - b.x, a.y - b.y) - 20) / range, 0, 1);
+}
+// Eine Tür, die in jeder Welt anders eingefärbt wird. Durch den Spalt leuchtet die nächste Welt.
+function paintDoor(c, r, o) {
+  c.save();
+  if (o.glow) { c.shadowColor = o.glow; c.shadowBlur = 16; }
+  c.fillStyle = o.frame; c.fillRect(r.x - 3, r.y - 3, r.w + 6, r.h + 3);
+  c.shadowBlur = 0;
+  c.fillStyle = o.light; c.fillRect(r.x, r.y, r.w, r.h);
+  if (o.open > 0) { // Lichtkegel auf den Boden
+    c.globalAlpha = 0.35 * o.open; c.fillStyle = o.light;
+    c.beginPath(); c.moveTo(r.x, r.y + r.h); c.lineTo(r.x + r.w, r.y + r.h);
+    c.lineTo(r.x + r.w + 14 * o.open, r.y + r.h + 18 * o.open); c.lineTo(r.x - 14 * o.open, r.y + r.h + 18 * o.open); c.fill();
+    c.globalAlpha = 1;
+  }
+  const pw = r.w * (1 - 0.78 * (o.open || 0));
+  c.fillStyle = o.panel; c.fillRect(r.x, r.y, pw, r.h);
+  if (pw > 8) {
+    c.strokeStyle = o.frame; c.globalAlpha = 0.5; c.lineWidth = 1;
+    c.strokeRect(r.x + 4.5, r.y + 4.5, pw - 9, r.h * 0.4); c.strokeRect(r.x + 4.5, r.y + r.h * 0.5 + 0.5, pw - 9, r.h * 0.42);
+    c.globalAlpha = 1;
+  }
+  c.fillStyle = o.knob; c.beginPath(); c.arc(r.x + pw - 5, r.y + r.h * 0.55, 2.2, 0, 7); c.fill();
+  c.restore();
+}
+
+// Richtungen für rasterbasierte Welten
+const DIRS = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
+function dirOf(src) { for (const k in DIRS) if (src[k]) return DIRS[k]; return null; }
+// Liefert pro Frame höchstens eine Richtung: sofort beim Drücken, danach mit Wiederholung beim Halten.
+function makeRepeater(first = 0.24, next = 0.11) {
+  let rep = 0;
+  return dt => {
+    const d = dirOf(pressed); if (d) { rep = first; return d; }
+    rep -= dt; const h = dirOf(keys); if (h && rep <= 0) { rep = next; return h; }
+    return null;
+  };
+}
+function label(c, text, x, y, color, align = 'left', size = 12) {
+  c.font = `600 ${size}px "IBM Plex Mono", monospace`; c.fillStyle = color; c.textAlign = align;
+  c.fillText(text, x, y); c.textAlign = 'left';
+}
+function flashOverlay(c, a, rgb = '255,80,60') { if (a > 0) { c.fillStyle = `rgba(${rgb},${a})`; c.fillRect(0, 0, W, H); } }
+// Kreis gegen Rechteck: liefert Normale und Eindringtiefe oder null
+function circleRect(cx, cy, r, b) {
+  const px = clamp(cx, b.x, b.x + b.w), py = clamp(cy, b.y, b.y + b.h);
+  let dx = cx - px, dy = cy - py, d = Math.hypot(dx, dy);
+  if (d >= r) return null;
+  if (d === 0) { // Mittelpunkt im Rechteck: zur nächsten Kante hinaus
+    const l = cx - b.x, rr = b.x + b.w - cx, t = cy - b.y, bb = b.y + b.h - cy, m = Math.min(l, rr, t, bb);
+    return m === l ? { nx: -1, ny: 0, depth: r + l } : m === rr ? { nx: 1, ny: 0, depth: r + rr } : m === t ? { nx: 0, ny: -1, depth: r + t } : { nx: 0, ny: 1, depth: r + bb };
+  }
+  return { nx: dx / d, ny: dy / d, depth: r - d };
+}
+// Sichtlinie zwischen zwei Punkten, blockiert von Rechtecken
+function lineOfSight(ax, ay, bx, by, solids, step = 6) {
+  const d = Math.hypot(bx - ax, by - ay), n = Math.ceil(d / step);
+  for (let i = 1; i < n; i++) {
+    const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n;
+    for (const s of solids) if (x > s.x && x < s.x + s.w && y > s.y && y < s.y + s.h) return false;
+  }
+  return true;
+}
+
+// Abschluss für Spiele ohne Laufweg: Nach dem Bestehen erscheint die Tür in der Mitte.
+function makeFinale(light) {
+  let t = -1; const rect = { x: W / 2 - 24, y: H / 2 - 56, w: 48, h: 90 };
+  return {
+    rect, get active() { return t >= 0; },
+    start() { if (t < 0) t = 0; },
+    update(dt) { t += dt; return t > 0.6 && (pressed.action || pressed.up); },
+    draw(c, frame, panel) {
+      if (t < 0) return;
+      c.save(); c.globalAlpha = clamp(t / 0.6, 0, 1);
+      c.fillStyle = 'rgba(0,0,0,0.5)'; c.fillRect(0, 0, W, H);
+      paintDoor(c, rect, { frame, panel, knob: '#ffffff', light, glow: light, open: 0.4 + 0.2 * Math.sin(t * 3) });
+      label(c, 'Geschafft! Leertaste / A: durch die Tür', W / 2, rect.y + rect.h + 34, '#ffffff', 'center', 13);
+      c.restore();
+    }
+  };
+}
+
+// Jump'n'Run-Physik auf einem Kachelgitter (für "Sprung" und "Farbwechsel").
+function platformPhysics(p, dt, T, solidAt, jumpPressed, jumpHeld) {
+  const collide = (axis, d) => {
+    const x0 = Math.floor(p.x / T), x1 = Math.floor((p.x + p.w - 0.01) / T);
+    const y0 = Math.floor(p.y / T), y1 = Math.floor((p.y + p.h - 0.01) / T);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!solidAt(x, y)) continue;
+      if (axis === 'x') { p.x = d > 0 ? x * T - p.w : (x + 1) * T; p.vx = 0; }
+      else { if (d > 0) { p.y = y * T - p.h; p.ground = true; } else p.y = (y + 1) * T; p.vy = 0; }
+      return;
+    }
+  };
+  const ax = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+  if (ax) p.face = ax;
+  p.vx += (ax * 170 - p.vx) * Math.min(1, dt * 14);
+  if (jumpPressed) p.buffer = 0.12;
+  p.coyote = p.ground ? 0.1 : p.coyote - dt; p.buffer -= dt;
+  if (p.buffer > 0 && p.coyote > 0) { p.vy = -480; p.buffer = 0; p.coyote = 0; }
+  if (!jumpHeld && p.vy < 0) p.vy += 1700 * dt; // kurzer Druck = kleiner Sprung
+  p.vy = Math.min(p.vy + 1400 * dt, 700);
+  const dx = p.vx * dt; p.x += dx; collide('x', dx);
+  const dy = p.vy * dt; p.y += dy; p.ground = false; collide('y', dy);
+  p.run += Math.abs(p.vx) * dt;
+}
+
+let stats = { deaths: 0, time: 0 };
+const died = () => stats.deaths++;
+
+/* ---------- Liste der Welten (einfach -> komplex) ---------- */
+const WORLDS = [
+  { name: 'Fangen', make: makeFangen, tint: '#ffd86b',
+    rule: 'Fang die goldenen Lichtkugeln mit der Schale. Dunkle Kugeln kosten ein Leben.',
+    notes: ['Zwölf Kugeln fangen.', 'Level 2: schneller, mehr dunkle Kugeln.', 'Level 3: noch schneller.', 'Level 4: Wind treibt die Kugeln zur Seite.', 'Level 5: Die Kugeln fallen im Zickzack.', 'Level 6: Wind und Zickzack zugleich.', 'Level 7: stärkerer Wind.', 'Level 8: Zickzack bei hohem Tempo.', 'Level 9: Sturm und Zickzack, 36 Kugeln.', 'Level 10: vierzig Kugeln im Sturm.'],
+    keys: [['← →', 'Schale bewegen']] },
+  { name: 'Abwehr', make: makeAbwehr, tint: '#ff7ad9',
+    rule: 'Dreh den Schild um den Kern und fang die Geschosse ab, die von allen Seiten anfliegen.',
+    notes: ['Zwölf Geschosse abwehren.', 'Level 2: schneller und häufiger.', 'Level 3: kleinerer Schild.', 'Level 4: Manche Geschosse sind besonders schnell.', 'Level 5: Die Geschosse fliegen Kurven.', 'Level 6: dreißig Geschosse, Kurven und Rasende.', 'Level 7: noch schneller.', 'Level 8: vierunddreißig Geschosse.', 'Level 9: sehr dichter Beschuss.', 'Level 10: vierzig Geschosse im Höchsttempo.'],
+    keys: [['← →', 'Schild drehen']] },
+  { name: 'Sortieren', make: makeSortieren, tint: '#a99bff',
+    rule: 'Wirf jedes Ding so schnell wie möglich in die richtige Schale. Fehler kosten drei Sekunden.',
+    notes: ['Nach Farbe: warm oder kalt.', 'Level 2: nach Form, rund oder eckig.', 'Level 3: nach Zahl, gerade oder ungerade.', 'Level 4: Der Rahmen sagt, ob Farbe oder Form zählt.', 'Level 5: drei Schalen nach Form.', 'Level 6: Farbe oder Form, nur 38 Sekunden.', 'Level 7: drei Schalen, 36 Sekunden.', 'Level 8: gerade oder ungerade, 26 Stück in 32 Sekunden.', 'Level 9: Farbe oder Form, 30 Sekunden.', 'Level 10: drei Schalen, 28 Stück in 28 Sekunden.'],
+    keys: [['← →', 'linke / rechte Schale'], ['↑', 'obere Schale (Level 5)']] },
+  { name: 'Labyrinth', make: makeLabyrinth, tint: '#3dff8f',
+    rule: 'Ein zufälliges Heckenlabyrinth. Lauf zur Tür unten rechts, bevor die Zeit abläuft.',
+    notes: ['Kleines Labyrinth, viel Zeit.', 'Level 2: größer, weniger Zeit.', 'Level 3: noch größer.', 'Level 4: knapp bemessen.', 'Level 5: riesig und sehr knapp.', 'Level 6: 24 × 13 Gänge.', 'Level 7: 26 × 14 Gänge.', 'Level 8: 28 × 15 Gänge.', 'Level 9: 30 × 16 Gänge.', 'Level 10: das größte Labyrinth, sehr knapp.'],
+    keys: [['↑ ↓ ← →', 'laufen']] },
+  { name: 'Zahlenspanne', make: makeZahlenspanne, tint: '#ffcf6b',
+    rule: 'Ziffern erscheinen nacheinander im Kerzenlicht. Gib sie danach in derselben Reihenfolge ein.',
+    notes: ['Vier Ziffern.', 'Level 2: fünf Ziffern.', 'Level 3: sechs Ziffern.', 'Level 4: sieben Ziffern.', 'Level 5: acht Ziffern.', 'Level 6: neun Ziffern.', 'Level 7: rückwärts! Sechs Ziffern.', 'Level 8: rückwärts, sieben Ziffern.', 'Level 9: rückwärts, acht Ziffern.', 'Level 10: rückwärts, neun Ziffern.'],
+    keys: [['← →', 'Ziffer wählen'], ['Leertaste / A', 'Ziffer setzen']] },
+  { name: 'Positionen', make: makePositionen, tint: '#7ad7ff',
+    rule: 'Einige Felder leuchten kurz auf. Markier danach genau diese Felder.',
+    notes: ['Drei von 16 Feldern.', 'Level 2: fünf Felder.', 'Level 3: sechs von 25 Feldern.', 'Level 4: acht Felder.', 'Level 5: zehn von 36 Feldern.', 'Level 6: elf von 36 Feldern.', 'Level 7: zwölf von 36 Feldern.', 'Level 8: dreizehn von 49 Feldern.', 'Level 9: vierzehn von 49 Feldern.', 'Level 10: fünfzehn von 49 Feldern.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen'], ['Leertaste / A', 'markieren']] },
+  { name: 'Zurück', make: makeZurueck, tint: '#c08bff',
+    rule: 'Zeichen erscheinen nacheinander. Drück die Leertaste, wenn ein Zeichen dem von N Schritten vorher gleicht.',
+    notes: ['Ein Schritt zurück.', 'Level 2: ein Schritt, schneller.', 'Level 3: zwei Schritte zurück.', 'Level 4: zwei Schritte, schneller.', 'Level 5: drei Schritte zurück.', 'Level 6: drei Schritte, schneller.', 'Level 7: drei Schritte, noch schneller.', 'Level 8: vier Schritte zurück.', 'Level 9: vier Schritte, schneller.', 'Level 10: vier Schritte, sehr schnell.'],
+    keys: [['Leertaste / A', 'gleich wie vorher']] },
+  { name: 'Klangschalen', make: makeKlangschalen, tint: '#ffd28a',
+    rule: 'Vier Schalen erklingen in einer Folge. Spiel sie rückwärts nach. Jede Runde wird die Folge länger.',
+    notes: ['Bis zu vier Töne.', 'Level 2: fünf Töne.', 'Level 3: sechs Töne.', 'Level 4: sieben Töne.', 'Level 5: acht Töne.', 'Level 6: neun Töne.', 'Level 7: neun Töne, schneller.', 'Level 8: zehn Töne.', 'Level 9: zehn Töne, sehr schnell.', 'Level 10: elf Töne.'],
+    keys: [['← ↑ → ↓', 'Schale anschlagen']] },
+  { name: 'Röhren', make: makeRoehren, tint: '#5ff2ff',
+    rule: 'Dreh die Rohrstücke, bis das leuchtende Wasser von der Quelle links bis zur Tür rechts fließt.',
+    notes: ['Fünf mal vier Rohre.', 'Level 2: sechs mal fünf.', 'Level 3: sieben mal fünf.', 'Level 4: acht mal sechs.', 'Level 5: neun mal sechs.', 'Level 6: neun mal sieben.', 'Level 7: zehn mal sieben.', 'Level 8: zehn mal acht.', 'Level 9: elf mal acht.', 'Level 10: elf mal acht, das größte Netz.'],
+    keys: [['↑ ↓ ← →', 'Rohr wählen'], ['Leertaste / A', 'drehen']] },
+  { name: 'Balance', make: makeBalance, tint: '#f2b26b',
+    rule: 'Balancier über das Seil zur Tür auf der anderen Seite. Wer zu weit kippt, fällt.',
+    notes: ['Kurzes Seil, kein Wind.', 'Level 2: Windböen.', 'Level 3: wackliger, stärkerer Wind.', 'Level 4: länger und stürmischer.', 'Level 5: das lange Seil im Sturm.', 'Level 6: noch länger, kräftige Böen.', 'Level 7: wackliger.', 'Level 8: tausend Schritte im Sturm.', 'Level 9: sehr wacklig, starke Böen.', 'Level 10: das längste Seil im Orkan.'],
+    keys: [['← →', 'Gewicht verlagern']] },
+  { name: 'Ausreißer', make: makeAusreisser, tint: '#7ac8ff',
+    rule: 'Unter vielen gleichen Zeichen ist genau eines anders. Finde es. Fehler kosten vier Sekunden.',
+    notes: ['Der Ausreißer ist heller.', 'Level 2: etwas gestaucht und blasser.', 'Level 3: leicht gedreht.', 'Level 4: kaum gedreht.', 'Level 5: winzige Unterschiede in Drehung und Farbe.', 'Level 6: mehr Steine, feinere Unterschiede.', 'Level 7: noch feiner.', 'Level 8: vierzehn Treffer nötig.', 'Level 9: sechzig Steine.', 'Level 10: kaum sichtbare Unterschiede.'],
+    keys: [['↑ ↓ ← →', 'Zeichen wählen'], ['Leertaste / A', 'auswählen']] },
+  { name: 'Blitz', make: makeBlitz, tint: '#53ffb0',
+    rule: 'Warte, bis das Mandala aufblüht, und drück dann so schnell du kannst. Wer zu früh drückt, muss neu warten.',
+    notes: ['Fünf Versuche, Schnitt unter 420 ms.', 'Level 2: nur bei Grün drücken, bei Rot stillhalten.', 'Level 3: Ein Pfeil zeigt, welche Taste es sein muss.', 'Level 4: Rote Pfeile heißen stillhalten.', 'Level 5: in die Gegenrichtung drücken!', 'Level 6: wieder einfach drücken, aber unter 360 ms.', 'Level 7: Grün und Rot, unter 420 ms, nur ein Fehler.', 'Level 8: Pfeile, unter 560 ms.', 'Level 9: rote Pfeile heißen stillhalten, unter 590 ms.', 'Level 10: Gegenrichtung, vierzehn Versuche.'],
+    keys: [['Leertaste / Pfeile', 'reagieren']] },
+  { name: 'Symbolsuche', make: makeSymbolsuche, tint: '#ffd86b',
+    rule: 'Kommt das goldene Zielzeichen in der Reihe darunter vor? Antworte so schnell wie möglich. Fehler kosten drei Sekunden.',
+    notes: ['Vier Zeichen pro Reihe.', 'Level 2: sechs Zeichen pro Reihe.', 'Level 3: acht Zeichen, alle sehen sich ähnlich.', 'Level 4: neun Zeichen pro Reihe.', 'Level 5: zehn Zeichen pro Reihe.', 'Level 6: zehn Zeichen, 23 Treffer.', 'Level 7: elf Zeichen pro Reihe.', 'Level 8: elf Zeichen, 25 Treffer.', 'Level 9: zwölf Zeichen pro Reihe.', 'Level 10: zwölf Zeichen, 28 Treffer.'],
+    keys: [['→', 'ja, kommt vor'], ['←', 'nein']] },
+  { name: 'Rechenblitz', make: makeRechenblitz, tint: '#4dffd2',
+    rule: 'Rechne im Kopf und wähle die richtige Antwort mit der passenden Pfeiltaste. Fehler kosten drei Sekunden.',
+    notes: ['Plus und Minus.', 'Level 2: Einmaleins und zweistellige Summen.', 'Level 3: zwei Rechenschritte.', 'Level 4: große Zahlen.', 'Level 5: Klammern und Teilen.', 'Level 6: Quadrate und Wurzeln.', 'Level 7: zwei Produkte voneinander abziehen.', 'Level 8: Prozentrechnen.', 'Level 9: Teilen, große Quadrate, zweistellig mal zweistellig.', 'Level 10: drei Rechenschritte.'],
+    keys: [['↑ → ↓ ←', 'Antwort wählen']] },
+  { name: 'Farbfolge', make: makeFarbfolge, tint: '#ff4fd8',
+    rule: 'Vier Lotusblätter leuchten und klingen in einer Folge. Spiel sie nach. Jede Runde wird die Folge länger.',
+    notes: ['Bis zu sechs Töne.', 'Level 2: acht Töne, schneller.', 'Level 3: zehn Töne, noch schneller.', 'Level 4: zwölf Töne.', 'Level 5: vierzehn Töne, sehr schnell.', 'Level 6: fünfzehn Töne.', 'Level 7: sechzehn Töne.', 'Level 8: siebzehn Töne.', 'Level 9: achtzehn Töne, sehr schnell.', 'Level 10: zwanzig Töne.'],
+    keys: [['↑ → ↓ ←', 'Blatt antippen']] },
+  { name: 'Sternenpfad', make: makeSternenpfad, tint: '#bcd4ff',
+    rule: 'Ein Sternbild zeichnet sich Stern für Stern und verlischt. Geh den Weg danach aus dem Gedächtnis nach.',
+    notes: ['Drei Sternbilder mit vier bis sechs Sternen.', 'Level 2: größerer Himmel, sechs bis acht Sterne.', 'Level 3: acht bis zehn Sterne, schneller gezeigt.', 'Level 4: Sternbilder mit zehn bis zwölf Sternen.', 'Level 5: zwölf bis vierzehn Sterne.', 'Level 6: dreizehn bis fünfzehn Sterne.', 'Level 7: noch größerer Himmel.', 'Level 8: fünfzehn bis siebzehn Sterne.', 'Level 9: sechzehn bis achtzehn Sterne.', 'Level 10: bis zu neunzehn Sterne, sehr schnell.'],
+    keys: [['↑ ↓ ← →', 'zum nächsten Stern']] },
+  { name: 'Veränderung', make: makeVeraenderung, tint: '#c9b48e',
+    rule: 'Merk dir die Steine im Zengarten. Nach einem Blinzeln hat sich einer verändert. Finde ihn.',
+    notes: ['Fünf Steine, Farbe oder Form ändert sich.', 'Level 2: sieben Steine, sie können auch den Platz wechseln.', 'Level 3: neun Steine, kürzer zu sehen.', 'Level 4: zehn Steine.', 'Level 5: zwölf Steine, nur kurz zu sehen.', 'Level 6: zwölf Steine, kürzer.', 'Level 7: dreizehn Steine.', 'Level 8: dreizehn Steine, sehr kurz.', 'Level 9: vierzehn Steine.', 'Level 10: vierzehn Steine, nur einen Augenblick.'],
+    keys: [['← →', 'Steine der Reihe nach'], ['↑ ↓', 'Stein darüber / darunter'], ['Leertaste / A', 'bestätigen']] },
+  { name: 'Fokus', make: makeFokus, tint: '#eeeeee',
+    rule: 'Das Wort nennt eine Farbe, ist aber oft in einer anderen geschrieben. Wähle die Farbe der Schrift. Fehler kosten drei Sekunden.',
+    notes: ['Halb passend, halb verwirrend.', 'Level 2: fast immer verwirrend.', 'Level 3: Im goldenen Rahmen zählt die Bedeutung des Wortes.', 'Level 4: Der Rahmen wechselt öfter.', 'Level 5: zwanzig richtige Antworten nötig.', 'Level 6: zweiundzwanzig richtige.', 'Level 7: der Rahmen wechselt öfter.', 'Level 8: vierundzwanzig richtige.', 'Level 9: fast nur verwirrende Wörter.', 'Level 10: sechsundzwanzig richtige, viele Wechsel.'],
+    keys: [['← ↑ → ↓', 'Farbe wählen']] },
+  { name: 'Der Flur', make: makeFlur, tint: '#dce8e1',
+    rule: 'Geh zur Tür. Mehr gibt es hier noch nicht zu tun.',
+    notes: ['', 'Level 2: fünf Wände, engere Gänge.', 'Level 3: Wollknäuel rollen durch die Gänge. Drück dich an die Wand.', 'Level 4: schnellere Wollknäuel.', 'Level 5: sehr schnelle Wollknäuel.', 'Level 6: noch schnellere Wollknäuel.', 'Level 7: rasende Wollknäuel.', 'Level 8: noch schneller.', 'Level 9: fast zu schnell zum Sehen.', 'Level 10: die schnellsten Wollknäuel.'],
+    keys: [['↑ ↓ ← →', 'gehen']] },
+  { name: 'Sprung', make: makeSprung, tint: '#7cc8f2',
+    rule: 'Spring über Lücken und Stacheln. Wer fällt, beginnt am Anfang.',
+    notes: ['', 'Level 2: längere Strecke mit Treppen und schwebenden Plattformen. Fahnen merken sich deinen Fortschritt.', 'Level 3: höhere Sprünge, breitere Stachelfelder.', 'Level 4: Plattformen im Abgrund und ein niedriger Tunnel.', 'Level 5: einzelne Steine, hohe Treppe, langer Tunnel.', 'Level 6: lange Strecke mit Trittsteinen, Stachelfeldern und Treppen.', 'Level 7: mehr Abgründe, Stachelfelder mit hohem Trittstein in der Mitte.', 'Level 8: niedrige Decken über Stacheln: kurz springen statt hoch.', 'Level 9: einzelne Steine über dem Abgrund, Stachelspalier vor der Tür.', 'Level 10: die längste Strecke, fast nur einzelne Steine und Stachelfelder.'],
+    keys: [['← →', 'laufen'], ['↑ / Leertaste', 'springen (länger halten = höher)']] },
+  { name: 'Eisbahn', make: makeEisbahn, tint: '#cde8f9',
+    rule: 'Auf dem Eis rutschst du, bis dich ein Stein oder die Wand aufhält. Schneefelder bremsen dich sofort.',
+    notes: ['', 'Level 2: mindestens 13 Rutschzüge.', 'Level 3: mindestens 19 Rutschzüge.', 'Level 4: mindestens 24 Rutschzüge.', 'Level 5: mindestens 29 Rutschzüge.', 'Level 6: größere Eisfläche, mindestens 33 Rutschzüge.', 'Level 7: noch größer, mindestens 38 Rutschzüge.', 'Level 8: Wasserlöcher! Wer hineinrutscht, beginnt von vorn. Mindestens 42 Züge.', 'Level 9: mehr Wasserlöcher, mindestens 45 Rutschzüge.', 'Level 10: die größte Eisfläche, mindestens 52 Rutschzüge.'],
+    keys: [['↑ ↓ ← →', 'losrutschen']] },
+  { name: 'Memory', make: makeMemory, tint: '#1d553b',
+    rule: 'Deck immer zwei Karten auf und finde alle Paare. Dann liegt die Tür auf dem Tisch.',
+    notes: ['Acht Paare.', 'Level 2: zehn Paare.', 'Level 3: zwölf Paare mit neuen Symbolen.', 'Level 4: vierzehn Paare.', 'Level 5: sechzehn Paare.', 'Level 6: sechzehn Paare, höchstens 46 Versuche.', 'Level 7: höchstens 42 Versuche.', 'Level 8: höchstens 38 Versuche.', 'Level 9: höchstens 35 Versuche.', 'Level 10: höchstens 32 Versuche.'],
+    keys: [['↑ ↓ ← →', 'Karte wählen'], ['Leertaste / A', 'aufdecken']] },
+  { name: 'Flattern', make: makeFlattern, tint: '#ffb38a',
+    rule: 'Du fliegst von allein. Flattere durch die Lücken zwischen den Säulen bis zur Tür auf der Wolke.',
+    notes: ['', 'Level 2: engere Lücken, mehr Säulen, schneller.', 'Level 3: Die Lücken wandern auf und ab.', 'Level 4: noch engere Lücken.', 'Level 5: achtzehn wandernde Säulen.', 'Level 6: zwanzig Säulen.', 'Level 7: engere Lücken.', 'Level 8: vierundzwanzig Säulen.', 'Level 9: noch schneller.', 'Level 10: achtundzwanzig wandernde Säulen.'],
+    keys: [['↑ / Leertaste', 'flattern']] },
+  { name: 'Ballon', make: makeBallon, tint: '#fbf8f0',
+    rule: 'Der Ballon steigt von allein. Lenk ihn an Dornenästen und Vögeln vorbei bis ganz nach oben.',
+    notes: ['', 'Level 2: mehr Äste und Vögel, der Ballon steigt schneller.', 'Level 3: noch dichter und schneller.', 'Level 4: noch dichter.', 'Level 5: fast nur Vögel.', 'Level 6: dreißig Hindernisse.', 'Level 7: engere Abstände.', 'Level 8: schnellere Vögel.', 'Level 9: sehr dicht.', 'Level 10: der dichteste Schwarm.'],
+    keys: [['← →', 'lenken']] },
+  { name: 'Schlange', make: makeSchlange, tint: '#9bbc0f',
+    rule: 'Friss genug Äpfel, dann öffnet sich die Tür in der Wand. Beiß dich nicht selbst.',
+    notes: ['Sechs Äpfel.', 'Level 2: zehn Äpfel, mehr Mauern.', 'Level 3: vierzehn Äpfel, ein Labyrinth aus Mauern.', 'Level 4: achtzehn Äpfel.', 'Level 5: zweiundzwanzig Äpfel, sehr schnell.', 'Level 6: vierundzwanzig Äpfel.', 'Level 7: sechsundzwanzig Äpfel.', 'Level 8: achtundzwanzig Äpfel.', 'Level 9: dreißig Äpfel.', 'Level 10: zweiunddreißig Äpfel, sehr schnell.'],
+    keys: [['↑ ↓ ← →', 'abbiegen']] },
+  { name: 'Ausbrechen', make: makeAusbrechen, tint: '#ff8a1f',
+    rule: 'Hinter der Steinmauer steht die Tür. Schlag mit dem Ball eine Lücke frei und triff die Tür.',
+    notes: ['', 'Level 2: sieben Reihen, die dunklen Steine brauchen zwei Treffer.', 'Level 3: Eine Stahlreihe mit nur zwei Lücken schützt die Tür.', 'Level 4: Stahl mit nur einer Lücke.', 'Level 5: alle Steine brauchen zwei Treffer.', 'Level 6: Eisenreihen, die drei Treffer brauchen.', 'Level 7: drei Eisenreihen.', 'Level 8: vier Eisenreihen.', 'Level 9: fünf Eisenreihen.', 'Level 10: fast alles Eisen.'],
+    keys: [['← →', 'Schläger'], ['Leertaste / ↑', 'Ball abschießen']] },
+  { name: 'Froschweg', make: makeFroschweg, tint: '#78c850',
+    rule: 'Hüpf über die Straße, ohne überfahren zu werden. Im Fluss trägt dich nur ein Baumstamm.',
+    notes: ['', 'Level 2: schnellerer Verkehr.', 'Level 3: noch schneller, kürzere Baumstämme.', 'Level 4: dichter Verkehr.', 'Level 5: Rushhour.', 'Level 6: noch dichter.', 'Level 7: schneller.', 'Level 8: sehr schnell.', 'Level 9: Verkehrschaos.', 'Level 10: der schnellste Fluss.'],
+    keys: [['↑ ↓ ← →', 'hüpfen']] },
+  { name: 'Schlüsselraum', make: makeSchluessel, tint: '#39ff8a',
+    rule: 'Die Tür ist verschlossen. Schieb die Kisten aus dem Weg und hol den Schlüssel.',
+    notes: ['', 'Level 2: Eine Kiste versperrt den Gang. Geradeaus schieben ist eine Falle.', 'Level 3: Zwei Kisten, und die Reihenfolge zählt.', 'Level 4: Auch im Gang zur Tür steht eine Kiste.', 'Level 5: dazu Fallen-Kisten im ersten Raum.', 'Level 6: Neu: Platten statt Schlüssel. Jede braucht eine Kiste. Leertaste = Zug zurück.', 'Level 7: zwei Kisten, mindestens 18 Schübe.', 'Level 8: drei Kisten auf drei Platten.', 'Level 9: drei Kisten, mindestens 34 Schübe.', 'Level 10: vier Kisten, mindestens 40 Schübe.'],
+    keys: [['↑ ↓ ← →', 'ein Feld gehen / schieben'], ['Leertaste', 'Zug zurück'], ['R', 'Raum zurücksetzen']] },
+  { name: 'Angeln', make: makeAngeln, tint: '#1aa3a3',
+    rule: 'Angle den goldenen Schlüsselfisch vom Grund. Fische fressen den Köder, Quallen reißen die Schnur.',
+    notes: ['', 'Level 2: mehr Quallen, flinkere Fische.', 'Level 3: Der Schlüsselfisch ist richtig schnell.', 'Level 4: sieben Quallen.', 'Level 5: acht Quallen, flinker Schlüsselfisch.', 'Level 6: flinkere Fische.', 'Level 7: neun Quallen.', 'Level 8: noch flinker.', 'Level 9: zehn Quallen.', 'Level 10: zehn Quallen, rasender Schlüsselfisch.'],
+    keys: [['↓ ↑', 'Haken senken / einholen'], ['← →', 'Boot fahren']] },
+  { name: 'Stapeln', make: makeStapeln, tint: '#f1e3c6',
+    rule: 'Lass die Blöcke so fallen, dass sie genau aufeinander liegen. Was übersteht, bricht ab.',
+    notes: ['Zehn Blöcke hoch.', 'Level 2: vierzehn Blöcke, schmalerer Grundblock.', 'Level 3: achtzehn Blöcke.', 'Level 4: zweiundzwanzig Blöcke.', 'Level 5: sechsundzwanzig Blöcke.', 'Level 6: achtundzwanzig Blöcke.', 'Level 7: dreißig Blöcke.', 'Level 8: zweiunddreißig Blöcke.', 'Level 9: vierunddreißig Blöcke.', 'Level 10: sechsunddreißig Blöcke, schmaler Grund.'],
+    keys: [['Leertaste / ↑', 'Block fallen lassen']] },
+  { name: 'Lichter', make: makeLichter, tint: '#d4af37',
+    rule: 'Jeder Schalter kippt sich selbst und seine vier Nachbarn. Mach alle Lichter aus.',
+    notes: ['', 'Level 2: verzwicktere Startstellung.', 'Level 3: 6×6 Schalter.', 'Level 4: 6×6, verzwickter.', 'Level 5: 7×7 Schalter.', 'Level 6: 7×7, verzwickter.', 'Level 7: 7×7, sehr verzwickt.', 'Level 8: 8×8 Schalter.', 'Level 9: 8×8, verzwickter.', 'Level 10: 8×8, sehr verzwickt.'],
+    keys: [['↑ ↓ ← →', 'Schalter wählen'], ['Leertaste / A', 'umlegen']] },
+  { name: 'Dunkelheit', make: makeDunkel, tint: '#b06cff',
+    rule: 'Sammle alle Funken, dann öffnet sich die Tür. Weich den Schatten aus.',
+    notes: ['Drei Funken.', 'Level 2: vier Funken, vier Schatten, weniger Licht.', 'Level 3: fünf Funken, fünf Schatten, kaum Licht.', 'Level 4: sechs Schatten, sieben Funken.', 'Level 5: acht Funken, fast kein Licht.', 'Level 6: großes Labyrinth, die Sicht wandert mit – acht Funken, sieben Schatten.', 'Level 7: noch größer: acht Funken, acht Schatten.', 'Level 8: neun Funken, neun Schatten, weniger Licht.', 'Level 9: zehn Funken, zehn Schatten.', 'Level 10: riesiges Labyrinth, zehn Funken, elf Schatten, kaum Licht.'],
+    keys: [['↑ ↓ ← →', 'schleichen']] },
+  { name: 'Minigolf', make: makeMinigolf, tint: '#47ab4d',
+    rule: 'Ziel, halte die Taste für mehr Kraft und lass los. Der Ball muss in die Tür rollen. Achtung, Wasser.',
+    notes: ['', 'Level 2: Zickzack-Bahn mit zwei Teichen.', 'Level 3: S-Kurve mit beweglichen Schranken.', 'Level 4: Schlangenbahn mit seitlichen Schranken.', 'Level 5: fünf enge Gänge, vier Teiche.', 'Level 6: Teichslalom – über, unter und wieder über das Wasser, dann durch den Spalt.', 'Level 7: vier Querbahnen, zwei Schranken in den Kurven.', 'Level 8: vier Gänge, jeder Durchgang wird von einer Schranke bewacht.', 'Level 9: Spirale – einmal ganz herum bis ins Zentrum.', 'Level 10: fünf enge Gänge, vier Schranken, fünf Teiche.'],
+    keys: [['← →', 'zielen'], ['Leertaste halten', 'Kraft aufladen']] },
+  { name: 'Schiebepuzzle', make: makeSchiebepuzzle, tint: '#c9935a',
+    rule: 'Schieb die Kacheln, bis das Bild wieder stimmt. Es zeigt die Tür, durch die du gleich gehst.',
+    notes: ['', 'Level 2: stärker gemischt.', 'Level 3: 4×4 mit fünfzehn Kacheln.', 'Level 4: 4×4, stark gemischt.', 'Level 5: 5×5 mit 24 Kacheln.', 'Level 6: 5×5, stärker gemischt.', 'Level 7: 5×5, stark gemischt.', 'Level 8: 6×6 mit 35 Kacheln.', 'Level 9: 6×6, stärker gemischt.', 'Level 10: 6×6, völlig gemischt.'],
+    keys: [['↑ ↓ ← →', 'Kachel schieben']] },
+  { name: 'Takt', make: makeTakt, tint: '#ff3fd2',
+    rule: 'Drück die passende Pfeiltaste, wenn eine Note den Ring erreicht. Mit genug Treffern öffnet sich die Tür. Ton an!',
+    notes: ['', 'Level 2: schnellerer Song, mehr halbe Schläge.', 'Level 3: noch schneller und länger.', 'Level 4: 146 Schläge pro Minute.', 'Level 5: 154 Schläge pro Minute.', 'Level 6: 160 Schläge pro Minute.', 'Level 7: 166 Schläge pro Minute.', 'Level 8: 172 Schläge pro Minute.', 'Level 9: 178 Schläge pro Minute.', 'Level 10: 184 Schläge pro Minute.'],
+    keys: [['← ↓ ↑ →', 'Noten treffen']] },
+  { name: 'Zwillinge', make: makeZwillinge, tint: '#ff4f7b',
+    rule: 'Du steuerst beide Figuren zugleich, die rechte läuft spiegelverkehrt. Nutze die Wände, um sie gegeneinander zu verschieben.',
+    notes: ['', 'Level 2: Löcher auf beiden Seiten, mindestens 25 Züge.', 'Level 3: mindestens 36 Züge.', 'Level 4: mindestens 44 Züge.', 'Level 5: noch längerer Weg.', 'Level 6: größere Räume, mindestens 50 Züge.', 'Level 7: mindestens 55 Züge.', 'Level 8: mindestens 60 Züge.', 'Level 9: Rechts ist jetzt auch oben und unten vertauscht. Mindestens 63 Züge.', 'Level 10: doppelt gespiegelt, mindestens 68 Züge.'],
+    keys: [['↑ ↓ ← →', 'beide bewegen'], ['R', 'zurück an den Start']] },
+  { name: 'Wächter', make: makeWaechter, tint: '#1d4e89',
+    rule: 'Schleich an den Wachen vorbei. Wer in einen Sichtkegel gerät, fliegt raus. Wände verdecken die Sicht.',
+    notes: ['', 'Level 2: schnellere Wachen mit größerer Sichtweite.', 'Level 3: dazu ein rotierender Wachposten vor der Tür.', 'Level 4: noch schnellere Wachen.', 'Level 5: zwei rotierende Posten.', 'Level 6: schnellere Wachen, weiter Blick.', 'Level 7: kürzere Pausen.', 'Level 8: noch schneller.', 'Level 9: kaum Pausen.', 'Level 10: die schnellsten Wachen.'],
+    keys: [['↑ ↓ ← →', 'schleichen']] },
+  { name: 'Lavaturm', make: makeLavaturm, tint: '#ff5a1f',
+    rule: 'Kletter den Turm hinauf. Sobald du dich bewegst, steigt unter dir die Lava.',
+    notes: ['', 'Level 2: höher, schmalere Stufen, schnellere Lava.', 'Level 3: noch höher und noch schneller.', 'Level 4: noch höher.', 'Level 5: schmalste Stufen.', 'Level 6: höher.', 'Level 7: schnellere Lava.', 'Level 8: noch höher.', 'Level 9: einzelne Steine.', 'Level 10: der höchste Turm.'],
+    keys: [['← →', 'laufen'], ['↑ / Leertaste', 'springen']] },
+  { name: 'Farbwechsel', make: makeFarbwechsel, tint: '#f2c230',
+    rule: 'Nur Blöcke der aktiven Farbe tragen dich. Wechsle die Farbe im richtigen Moment, auch mitten im Sprung.',
+    notes: ['', 'Level 2: Brücken in wechselnden Farben und eine Treppe, die einen Wechsel im Sprung verlangt.', 'Level 3: im Zweierschritt wechselnde Brücken und eine lange Farbtreppe.', 'Level 4: Ketten aus einzelnen Farbsteinen.', 'Level 5: lange Farbtreppe und fünf Farbwände.', 'Level 6: lange Strecke aus Farbbrücken, Farbwänden, Treppen und Steinketten.', 'Level 7: Farbwände über den Brücken und in der Luft: im Sprung zweimal wechseln.', 'Level 8: mehr Wände in der Luft, Brücken im Zweierschritt.', 'Level 9: Ketten aus einzelnen Farbsteinen, lange Brücken mit Wänden.', 'Level 10: die längste Strecke mit den meisten Wechseln.'],
+    keys: [['← →', 'laufen'], ['↑', 'springen'], ['Leertaste / A', 'Farbe wechseln']] },
+  { name: 'Umkehr', make: makeUmkehr, tint: '#55ffff',
+    rule: 'Springen kannst du nicht. Dafür drehst du die Schwerkraft um, sobald du Boden unter den Füßen hast.',
+    notes: ['', 'Level 2: ein schwebender Block über einem Doppel-Loch.', 'Level 3: zwei Blöcke als Treppe über einem langen Loch.', 'Level 4: drei schwebende Blöcke und eine Zickzackwand.', 'Level 5: vier Blöcke über einem langen Loch.', 'Level 6: lange Strecke mit Stachelreihen, Zickzackwänden und Inseln über Löchern.', 'Level 7: versetzte Löcher in Boden und Decke: im Flug über das Lochende.', 'Level 8: engere Zickzackwände, mehr Inseln über langen Löchern.', 'Level 9: kürzere Inseln, dichtere Stachelreihen.', 'Level 10: die längste Strecke, kleine Inseln weit auseinander.'],
+    keys: [['← →', 'laufen'], ['Leertaste / ↑ ↓', 'Schwerkraft umdrehen']] },
+  { name: 'Bomben', make: makeBomben, tint: '#58a845',
+    rule: 'Sprenge Kisten frei, unter einer liegt die Tür. Sie öffnet sich erst, wenn alle Ballonwesen besiegt sind.',
+    notes: ['Zwei Gegner.', 'Level 2: drei schnellere Gegner, mehr Kisten.', 'Level 3: vier Gegner.', 'Level 4: fünf Gegner.', 'Level 5: sechs Gegner.', 'Level 6: schnellere Gegner, mehr Kisten.', 'Level 7: noch schneller.', 'Level 8: noch mehr Kisten.', 'Level 9: flinke Gegner.', 'Level 10: die schnellsten Gegner.'],
+    keys: [['↑ ↓ ← →', 'gehen'], ['Leertaste / A', 'Bombe legen']] },
+  { name: 'Liane', make: makeLiane, tint: '#a8506a',
+    rule: 'Halte die Taste gedrückt, um dich am nächsten Ring festzuhalten. Schwing Schwung und lass im richtigen Moment los.',
+    notes: ['', 'Level 2: weitere Abstände, eine winzige Insel.', 'Level 3: keine Insel mehr, nur Ringe.', 'Level 4: lange Strecke ohne Insel.', 'Level 5: lange Strecke, stark schwankende Ringe.', 'Level 6: zehn Ringe, mal hoch, mal tief.', 'Level 7: elf Ringe mit weiteren Abständen.', 'Level 8: zwölf Ringe, von tiefen zu hohen Ringen genau loslassen.', 'Level 9: dreizehn Ringe, kleinere Zielinsel.', 'Level 10: vierzehn Ringe, die längste Strecke im Dschungel.'],
+    keys: [['Leertaste halten', 'festhalten'], ['← →', 'Schwung holen'], ['↑', 'springen']] },
+  { name: 'Laser', make: makeLaser, tint: '#9dff00',
+    rule: 'Dreh die Spiegel so, dass der Laserstrahl das Schloss der Tür trifft.',
+    notes: ['', 'Level 2: mindestens sechs Drehungen.', 'Level 3: mindestens neun Drehungen.', 'Level 4: mindestens elf Drehungen.', 'Level 5: mindestens dreizehn Drehungen.', 'Level 6: größeres Feld, mindestens 15 Drehungen.', 'Level 7: mindestens 17 Drehungen.', 'Level 8: Der Strahl muss vor dem Schloss einen Kristall treffen.', 'Level 9: zwei Kristalle, mindestens 20 Drehungen.', 'Level 10: drei Kristalle, mindestens 22 Drehungen.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen'], ['Leertaste / A', 'Spiegel drehen']] },
+  { name: 'Stillstand', make: makeStillstand, tint: '#f2f2f0',
+    rule: 'Die Zeit läuft nur, wenn du dich bewegst. Bleib stehen, um die roten Geschosse zu studieren.',
+    notes: ['', 'Level 2: mehr Geschütze, schnellere Geschosse.', 'Level 3: neun Geschütze, eins davon direkt an der Tür.', 'Level 4: zehn Geschütze.', 'Level 5: elf Geschütze, schnelle Geschosse.', 'Level 6: schnellere Geschosse.', 'Level 7: kürzeres Nachladen.', 'Level 8: noch schneller.', 'Level 9: Dauerfeuer.', 'Level 10: elf Geschütze im Dauerfeuer.'],
+    keys: [['↑ ↓ ← →', 'gehen (und die Zeit laufen lassen)']] },
+  { name: 'Blöcke', make: makeBloecke, tint: '#c62828',
+    rule: 'Fallende Steine: Räum genug volle Reihen ab, dann öffnet sich die Tür.',
+    notes: ['Vier Reihen.', 'Level 2: acht Reihen, schnellerer Fall.', 'Level 3: zwölf Reihen, und unten liegt schon Müll.', 'Level 4: sechzehn Reihen, sechs Müllreihen.', 'Level 5: zwanzig Reihen.', 'Level 6: vierundzwanzig Reihen.', 'Level 7: achtundzwanzig Reihen.', 'Level 8: zweiunddreißig Reihen.', 'Level 9: sechsunddreißig Reihen.', 'Level 10: vierzig Reihen, sehr schnell.'],
+    keys: [['← →', 'verschieben'], ['↑', 'drehen'], ['↓', 'schneller'], ['Leertaste', 'fallen lassen']] },
+  { name: 'Verteidigung', make: makeVerteidigung, tint: '#efe2c2',
+    rule: 'Bau Türme an den Bauplätzen und halte alle Wellen vom Burgtor fern. Jeder besiegte Gegner bringt Gold.',
+    notes: ['Drei Wellen.', 'Level 2: vier Wellen, zähere Gegner.', 'Level 3: fünf Wellen.', 'Level 4: sechs Wellen, Türme bis Stufe 3.', 'Level 5: sieben Wellen.', 'Level 6: acht Wellen.', 'Level 7: neun Wellen.', 'Level 8: zehn Wellen, Türme bis Stufe 4.', 'Level 9: elf Wellen.', 'Level 10: zwölf Wellen.'],
+    keys: [['↑ ↓ ← →', 'Bauplatz wählen'], ['Leertaste / A', 'bauen / verbessern']] },
+  { name: 'Zeitschleife', make: makeZeitschleife, tint: '#ff6ad5',
+    rule: 'Jede Runde dauert nur ein paar Sekunden, dann wiederholt ein Klon deine Bewegungen. Platten halten Durchgänge nur offen, solange jemand darauf steht.',
+    notes: ['Acht Sekunden pro Runde, zwei Platten.', 'Level 2: drei Platten, zwei Gitter, drei Klone nötig.', 'Level 3: weitere Wege und nur sieben Sekunden pro Runde.', 'Level 4: drei Platten, weite Wege.', 'Level 5: vier Platten, vier Klone.', 'Level 6: vier Platten, nur drei Klone – einer muss nacheinander zwei Platten halten.', 'Level 7: fünf Platten, drei Klone – zwei Klone wechseln die Platte.', 'Level 8: Türkise Gitter schließen sich, solange jemand auf ihrer Platte steht.', 'Level 9: fünf Platten, drei Klone, zwei türkise Gitter.', 'Level 10: sechs Platten, vier Klone – der letzte Klon muss warten, bis du vorbei bist.'],
+    keys: [['↑ ↓ ← →', 'gehen'], ['Leertaste / A', 'Runde beenden, Klon erzeugen'], ['R', 'Klone löschen']] },
+  { name: 'Schwerelos', make: makeSchwerelos, tint: '#ffcf6b',
+    rule: 'Flieg durch den Asteroidengürtel zur Tür. Der Planet in der Mitte zieht dich an.',
+    notes: ['', 'Level 2: mehr Asteroiden, stärkere Anziehung.', 'Level 3: zwei Planeten.', 'Level 4: zwölf Asteroiden.', 'Level 5: drei Planeten.', 'Level 6: vierzehn Asteroiden.', 'Level 7: stärkere Anziehung.', 'Level 8: sechzehn Asteroiden.', 'Level 9: siebzehn Asteroiden.', 'Level 10: achtzehn Asteroiden, starke Anziehung.'],
+    keys: [['← →', 'drehen'], ['↑', 'Schub geben']] },
+  { name: 'Mehr oder weniger', make: makeMehrOderWeniger, tint: '#b8ff8a',
+    rule: 'Zwei Gläser voller Glühwürmchen: Wähle schnell das Glas mit mehr Tieren. Fehler und Zögern kosten ein Leben.',
+    notes: ['Große Unterschiede, viel Zeit.', 'Level 2: etwas knapper.', 'Level 3: mehr Glühwürmchen, weniger Zeit.', 'Level 4: knappere Unterschiede.', 'Level 5: Manchmal wird nach WENIGER gefragt.', 'Level 6: Die Glühwürmchen schwirren umher.', 'Level 7: schneller und knapper.', 'Level 8: Die Tiere sind verschieden groß – zähl nicht die Fläche.', 'Level 9: sehr knappe Unterschiede.', 'Level 10: viele Tiere, kaum Zeit.'],
+    keys: [['←', 'linkes Glas'], ['→', 'rechtes Glas']] },
+  { name: 'Kartenschnipp', make: makeKartenschnipp, tint: '#e8413a',
+    rule: 'Zwei Karten werden aufgedeckt. Sind sie gleich oder verschieden? Antworte, bevor die Zeit abläuft.',
+    notes: ['Nur die Farbe zählt.', 'Level 2: Nur die Form zählt.', 'Level 3: Farbe und Form zählen.', 'Level 4: Nur die Anzahl zählt.', 'Level 5: Farbe und Anzahl zählen.', 'Level 6: Farbe, Form und Anzahl zählen.', 'Level 7: Oft unterscheidet sich nur ein Merkmal.', 'Level 8: Die rechte Karte liegt schief.', 'Level 9: weniger Zeit.', 'Level 10: kaum Bedenkzeit.'],
+    keys: [['←', 'gleich'], ['→', 'verschieden']] },
+  { name: 'Pfeilsturm', make: makePfeilsturm, tint: '#8fe8ff',
+    rule: 'Reihen aus Pfeilen ziehen im Gewitter heran. Tipp sie so schnell wie möglich von links nach rechts ab, bevor die Zeit abläuft.',
+    notes: ['Kurze Reihen, viel Zeit.', 'Level 2: mehr Reihen.', 'Level 3: längere Reihen.', 'Level 4: weniger Zeit.', 'Level 5: Rote Pfeile – drück die Gegenrichtung!', 'Level 6: mehr rote Pfeile.', 'Level 7: noch weniger Zeit.', 'Level 8: sechs Pfeile pro Reihe.', 'Level 9: viele rote Pfeile.', 'Level 10: sieben Pfeile, knappe Zeit.'],
+    keys: [['← ↑ → ↓', 'Pfeil abtippen']] },
+  { name: 'Treppensprint', make: makeTreppensprint, tint: '#c8a0ff',
+    rule: 'Eine endlose Treppe in den Himmel: Drück die Richtung der nächsten Stufe. Die Ausdauer sinkt ständig, nur Tempo füllt sie auf.',
+    notes: ['Gemächlicher Aufstieg.', 'Level 2: höher hinaus.', 'Level 3: Die Ausdauer sinkt schneller.', 'Level 4: noch mehr Stufen.', 'Level 5: Goldene Stufen genau darüber – drück ↑.', 'Level 6: mehr goldene Stufen.', 'Level 7: schnelleres Tempo nötig.', 'Level 8: Nebel – nur die nächsten Stufen sind zu sehen.', 'Level 9: dichter Nebel.', 'Level 10: 110 Stufen im Sprint.'],
+    keys: [['← →', 'Stufe links / rechts'], ['↑', 'goldene Stufe darüber']] },
+  { name: 'Punktezählen', make: makePunktezaehlen, tint: '#ffe080',
+    rule: 'Im Fernrohr blitzen kurz Sterne auf. Wie viele waren es? Jede Pfeiltaste wählt eine der vier Zahlen.',
+    notes: ['Wenige Sterne, lange sichtbar.', 'Level 2: ein Stern mehr.', 'Level 3: kürzer sichtbar.', 'Level 4: bis zu acht Sterne.', 'Level 5: noch kürzer.', 'Level 6: bis zu neun Sterne.', 'Level 7: Blaue Sterne zählen nicht – nur die goldenen!', 'Level 8: mehr goldene Sterne.', 'Level 9: kürzer sichtbar.', 'Level 10: bis zu zehn Sterne, wenig Zeit.'],
+    keys: [['← ↑ → ↓', 'Zahl wählen']] },
+  { name: 'Buchstabenjagd', make: makeBuchstabenjagd, tint: '#d9a066',
+    rule: 'Im Setzkasten steckt genau einmal der gesuchte Buchstabe. Fahr mit dem Greifer hin und greif zu, bevor die Zeit abläuft.',
+    notes: ['Kleiner Kasten.', 'Level 2: mehr Fächer.', 'Level 3: mehr Runden.', 'Level 4: noch größer.', 'Level 5: Ähnliche Lettern mischen sich darunter.', 'Level 6: mehr Verwechslungsgefahr.', 'Level 7: großer Kasten, viele Doppelgänger.', 'Level 8: fast nur Doppelgänger.', 'Level 9: riesiger Kasten.', 'Level 10: nur noch Doppelgänger.'],
+    keys: [['Pfeiltasten', 'Greifer bewegen'], ['Leertaste', 'zugreifen']] },
+  { name: 'Wettrennen', make: makeWettrennen, tint: '#ff4fa0',
+    rule: 'Renn gegen den Schattenläufer: Drück abwechselnd ← und →, um Tempo zu machen. Wer zuerst im Ziel ist, gewinnt.',
+    notes: ['Ein gemütlicher Gegner.', 'Level 2: Der Schatten wird schneller.', 'Level 3: längere Strecke.', 'Level 4: Hürden! Spring rechtzeitig mit ↑.', 'Level 5: mehr Hürden.', 'Level 6: schnellerer Gegner.', 'Level 7: acht Hürden.', 'Level 8: noch schneller.', 'Level 9: zehn Hürden.', 'Level 10: zwölf Hürden, flinker Schatten.'],
+    keys: [['← →', 'abwechselnd: rennen'], ['↑', 'springen']] },
+  { name: 'Slalom', make: makeSlalom, tint: '#6aa8ff',
+    rule: 'Der Skifahrer saust von allein bergab. Lenk ihn durch die Tore – ein verpasstes Tor kostet ein Leben.',
+    notes: ['Breite Tore, gemütliches Tempo.', 'Level 2: etwas schneller.', 'Level 3: schmalere Tore.', 'Level 4: weiter auseinander.', 'Level 5: Tannen stehen im Weg.', 'Level 6: mehr Tannen, schneller.', 'Level 7: enge Tore.', 'Level 8: noch schneller.', 'Level 9: sehr enge Tore.', 'Level 10: Höchsttempo.'],
+    keys: [['← →', 'lenken']] },
+  { name: 'Hütchenspiel', make: makeHuetchen, tint: '#f2c25a',
+    rule: 'Unter einem Becher liegt die Perle. Folge ihm mit den Augen, während die Becher vertauscht werden, und heb danach den richtigen an.',
+    notes: ['Drei Becher, wenige Züge.', 'Level 2: mehr Züge.', 'Level 3: drei Runden, flinkere Hände.', 'Level 4: vier Becher.', 'Level 5: noch mehr Züge.', 'Level 6: schneller.', 'Level 7: fünf Becher, zwei Paare tauschen gleichzeitig.', 'Level 8: mehr Doppeltausche.', 'Level 9: drei Becher rücken im Kreis.', 'Level 10: elf Züge in Höchsttempo.'],
+    keys: [['← →', 'Becher wählen'], ['Leertaste', 'anheben']] },
+  { name: 'Flanker', make: makeFlanker, tint: '#ff8a3c',
+    rule: 'Nur der mittlere Koi zählt: Drück die Pfeiltaste in seine Schwimmrichtung, egal wohin seine Nachbarn schwimmen.',
+    notes: ['Der Schwarm bleibt stehen, bis du antwortest.', 'Level 2: Der Schwarm taucht nach kurzer Zeit ab.', 'Level 3: öfter verwirrende Nachbarn.', 'Level 4: Der Schwarm erscheint an wechselnden Orten.', 'Level 5: sieben Fische.', 'Level 6: kürzer sichtbar.', 'Level 7: Violetter Mittelfisch = Gegenrichtung!', 'Level 8: mehr violette Fische.', 'Level 9: knapper.', 'Level 10: 24 richtige Antworten nötig.'],
+    keys: [['← →', 'Richtung des mittleren Fisches']] },
+  { name: 'Unterschiede', make: makeUnterschiede, tint: '#d9a441',
+    rule: 'Zwei Gemälde, fast gleich. Finde mit der Lupe alle Unterschiede, bevor die Zeit abläuft. Fehlklicks kosten vier Sekunden.',
+    notes: ['Drei deutliche Unterschiede.', 'Level 2: Auch Formen ändern sich.', 'Level 3: mehr Dinge im Bild.', 'Level 4: Auch Größen ändern sich.', 'Level 5: fünf Unterschiede, kleinere Dinge.', 'Level 6: sechs Unterschiede.', 'Level 7: feine Farbtöne und verschobene Dinge.', 'Level 8: sieben Unterschiede.', 'Level 9: noch mehr Dinge.', 'Level 10: acht feine Unterschiede.'],
+    keys: [['Pfeiltasten', 'Lupe bewegen'], ['Leertaste', 'markieren']] },
+  { name: 'Zählwerk', make: makeZaehlwerk, tint: '#ffa65a',
+    rule: 'Der Wind trägt allerlei durch den Abendhimmel. Zähle nur die angesagte Art und wähle danach die richtige Zahl.',
+    notes: ['Zwei Arten, wenige Dinge.', 'Level 2: mehr Dinge.', 'Level 3: drei Arten.', 'Level 4: Manche fliegen schräg.', 'Level 5: Doppelgänger in anderer Farbe zählen nicht.', 'Level 6: vier Arten, schneller.', 'Level 7: noch mehr Ziele.', 'Level 8: Zähle zwei Arten zugleich!', 'Level 9: fünf Arten.', 'Level 10: dichtes Gewimmel.'],
+    keys: [['← ↑ → ↓', 'Zahl wählen']] },
+  { name: 'Verfolgen', make: makeVerfolgen, tint: '#78e6ff',
+    rule: 'Einige Quallen glühen kurz golden. Behalte sie im Blick, während alle durcheinander treiben, und markiere sie danach.',
+    notes: ['Eine Qualle von fünf.', 'Level 2: zwei Ziele.', 'Level 3: sieben Quallen.', 'Level 4: acht Quallen, längere Fahrt.', 'Level 5: drei Ziele.', 'Level 6: neun Quallen, schneller.', 'Level 7: Quallen schlagen Haken.', 'Level 8: vier Ziele.', 'Level 9: Felsen verdecken die Sicht.', 'Level 10: vier von zwölf.'],
+    keys: [['Pfeiltasten', 'Zeiger bewegen'], ['Leertaste', 'markieren']] },
+  { name: 'Leuchtturm', make: makeLeuchtturm, tint: '#ffe08a',
+    rule: 'Dreh den Lichtkegel durch den Nebel. Steht ein Schiff ganz im Licht, gib ihm mit der Leertaste ein Signal, bevor es verschwindet.',
+    notes: ['Schiffslaternen blinken schwach im Nebel.', 'Level 2: mehr Schiffe.', 'Level 3: schmalerer Kegel.', 'Level 4: Keine Laternen mehr – such selbst.', 'Level 5: Eisberge! Nicht anfunken.', 'Level 6: mehr Eisberge, weniger Zeit.', 'Level 7: Schiffe treiben zur Seite.', 'Level 8: schneller treibend.', 'Level 9: noch schmalerer Kegel.', 'Level 10: 14 Schiffe in kurzer Zeit.'],
+    keys: [['← →', 'Licht drehen'], ['Leertaste', 'Signal geben']] },
+  { name: 'Uhrwache', make: makeUhrwache, tint: '#c8d0ff',
+    rule: 'Der Komet springt Stern für Stern um die Uhr. Springt er zwei Sterne weit, drück sofort die Leertaste. Halte Wache bis zum Ende.',
+    notes: ['Dreißig Sekunden Wache.', 'Level 2: etwas länger.', 'Level 3: feinere Teilung.', 'Level 4: schnelleres Ticken.', 'Level 5: Sternschnuppen lenken ab.', 'Level 6: noch feinere Teilung.', 'Level 7: eine Minute Wache.', 'Level 8: Der Zeiger stockt manchmal – kein Signal!', 'Level 9: sechzig Sterne.', 'Level 10: lange Wache, schnelles Ticken.'],
+    keys: [['Leertaste', 'Doppelsprung melden']] },
+  { name: 'Doppelspur', make: makeDoppelspur, tint: '#b98bff',
+    rule: 'Lenk das Boot durch die Felsen und behalte zugleich den Signalturm im Blick: Nur beim Zielzeichen die Leertaste drücken.',
+    notes: ['Gemächliche Fahrt.', 'Level 2: schneller.', 'Level 3: mehr Zeichen.', 'Level 4: manchmal zwei Felsen nebeneinander.', 'Level 5: Doppelgänger in Form oder Farbe.', 'Level 6: kürzere Zeichen.', 'Level 7: Unterwegs wechselt das Zielzeichen.', 'Level 8: schneller.', 'Level 9: dichtere Felsen.', 'Level 10: volle Fahrt.'],
+    keys: [['← →', 'Boot lenken'], ['Leertaste', 'Zielzeichen']] },
+  { name: 'Wiedersehen', make: makeWiedersehen, tint: '#c9a8ff',
+    rule: 'Mandalas erscheinen nacheinander. Sag bei jedem, ob du es schon einmal gesehen hast (←) oder ob es neu ist (→).',
+    notes: ['', 'Level 2: sechzehn Bilder.', 'Level 3: Manche neuen Bilder ähneln alten.', 'Level 4: zwanzig Bilder, längere Abstände.', 'Level 5: mehr ähnliche Bilder.', 'Level 6: vierundzwanzig Bilder.', 'Level 7: Wiederholungen nach langer Zeit.', 'Level 8: achtundzwanzig Bilder.', 'Level 9: viele fast gleiche Bilder.', 'Level 10: zweiunddreißig Bilder.'],
+    keys: [['←', 'schon gesehen'], ['→', 'neu']] },
+  { name: 'Einkaufsliste', make: makeEinkaufsliste, tint: '#c8463a',
+    rule: 'Merk dir die Dinge auf dem Einkaufszettel und pack danach genau diese aus dem Regal in den Korb.',
+    notes: ['', 'Level 2: vier Dinge, acht im Regal.', 'Level 3: neun Dinge im Regal.', 'Level 4: fünf Dinge – manche liegen auch in anderer Farbe im Regal.', 'Level 5: zwölf Dinge im Regal, mehr ähnliche Ablenker.', 'Level 6: sechs Dinge auf der Liste.', 'Level 7: vierzehn Dinge im Regal.', 'Level 8: sieben Dinge, viele ähnliche Ablenker.', 'Level 9: fünfzehn Dinge im Regal.', 'Level 10: acht Dinge, fast nur ähnliche Ablenker.'],
+    keys: [['↑ ↓ ← →', 'Ding wählen'], ['Leertaste / A', 'einpacken / zurücklegen']] },
+  { name: 'Reihenfolge', make: makeReihenfolge, tint: '#ffd88a',
+    rule: 'Laternen treiben nacheinander den Fluss herab. Tipp sie danach in derselben Reihenfolge an.',
+    notes: ['', 'Level 2: vier Laternen.', 'Level 3: Eine fremde Laterne liegt dabei.', 'Level 4: fünf Laternen.', 'Level 5: zwei fremde Laternen.', 'Level 6: sechs Laternen.', 'Level 7: Am Ufer verlieren die Laternen ihre Farbe.', 'Level 8: schneller.', 'Level 9: sieben Laternen.', 'Level 10: vier fremde Laternen, sehr schnell.'],
+    keys: [['↑ ↓ ← →', 'Laterne wählen'], ['Leertaste / A', 'antippen']] },
+  { name: 'Zuordnung', make: makeZuordnung, tint: '#4fd1b5',
+    rule: 'Unter den Kacheln liegen Zeichen. Merk dir, wo welches liegt, und wähl dann die Kachel zum Zeichen des Orakels.',
+    notes: ['', 'Level 2: vier Kacheln.', 'Level 3: fünf Kacheln.', 'Level 4: sechs Kacheln.', 'Level 5: kürzer zu sehen.', 'Level 6: sieben Kacheln, sie drehen sich nacheinander um.', 'Level 7: acht Kacheln, nacheinander.', 'Level 8: Jedes Zeichen gibt es in zwei Farben.', 'Level 9: neun Kacheln.', 'Level 10: zehn Kacheln, schneller.'],
+    keys: [['↑ ↓ ← →', 'Kachel wählen'], ['Leertaste / A', 'aufdecken']] },
+  { name: 'Schattenbild', make: makeSchattenbild, tint: '#e89a4a',
+    rule: 'Merk dir die bunte Figur und wähl danach den Schatten, der genau zu ihr passt – gleich liegend.',
+    notes: ['', 'Level 2: fünf Steine.', 'Level 3: Schatten mit zwei versetzten Steinen.', 'Level 4: sechs Steine, nur ein Stein versetzt.', 'Level 5: sechs Figuren hintereinander.', 'Level 6: sieben Steine, gespiegelte Schatten.', 'Level 7: kürzer zu sehen.', 'Level 8: acht Steine, auch gedrehte Schatten.', 'Level 9: noch kürzer zu sehen.', 'Level 10: neun Steine.'],
+    keys: [['← →', 'Schatten wählen'], ['Leertaste / A', 'bestätigen']] },
+  { name: 'Muster', make: makeMuster, tint: '#2f74ff',
+    rule: 'Ein Glasfenster leuchtet kurz auf. Bau das Muster danach Feld für Feld nach und drück auf „Fertig“.',
+    notes: ['', 'Level 2: vier Gläser.', 'Level 3: Fenster mit vier mal vier Feldern.', 'Level 4: drei Farben.', 'Level 5: sechs Gläser.', 'Level 6: fünf mal fünf Felder.', 'Level 7: sieben Gläser.', 'Level 8: vier Farben, acht Gläser.', 'Level 9: kürzer zu sehen.', 'Level 10: neun Gläser.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen / zu „Fertig“'], ['Leertaste / A', 'Farbe wechseln / prüfen']] },
+  { name: 'Wegbeschreibung', make: makeWegbeschreibung, tint: '#8a9cff',
+    rule: 'Merk dir die Wegbeschreibung und geh den Weg danach Schritt für Schritt – ein falsches Feld, und du hast dich verlaufen.',
+    notes: ['', 'Level 2: drei Abschnitte.', 'Level 3: längere Abschnitte.', 'Level 4: vier Abschnitte.', 'Level 5: kürzer zu sehen.', 'Level 6: fünf Abschnitte, mehr falsche Türen.', 'Level 7: Die Beschreibung erscheint nur noch Zeile für Zeile.', 'Level 8: sechs Abschnitte, bis zu fünf Schritte lang.', 'Level 9: noch kürzer zu sehen.', 'Level 10: sieben Abschnitte.'],
+    keys: [['↑ ↓ ← →', 'ein Schritt']] },
+  { name: 'Rhythmus', make: makeRhythmus, tint: '#ff7a3a',
+    rule: 'Die Trommel spielt einen Rhythmus vor. Klopf ihn danach mit der Leertaste im selben Rhythmus nach. Ton an!',
+    notes: ['', 'Level 2: vier Schläge.', 'Level 3: längere Pausen.', 'Level 4: fünf Schläge.', 'Level 5: Der Rhythmus erklingt nur noch einmal.', 'Level 6: sechs Schläge mit halben Schlägen.', 'Level 7: punktierte Schläge.', 'Level 8: sieben Schläge, genauer.', 'Level 9: lange Pausen kommen dazu.', 'Level 10: acht Schläge, sehr genau.'],
+    keys: [['Leertaste / A', 'klopfen']] },
+  { name: 'Maulwurf', make: makeMaulwurf, tint: '#7dffc8',
+    rule: 'Hau die Maulwürfe, bevor sie wieder abtauchen. Drei entwischte, und es geht von vorn los.',
+    notes: ['', 'Level 2: 10 Maulwürfe, sie bleiben kürzer oben.', 'Level 3: 12 Maulwürfe, noch etwas schneller.', 'Level 4: Rote Stachelkugeln tauchen auf – nicht hauen!', 'Level 5: 15 Maulwürfe, kürzere Sichtzeit.', 'Level 6: Jetzt können zwei Maulwürfe gleichzeitig oben sein.', 'Level 7: 18 Maulwürfe, mehr Stachelkugeln.', 'Level 8: 20 Maulwürfe, nur noch 1,2 Sekunden Sicht.', 'Level 9: 22 Maulwürfe, schneller Wechsel.', 'Level 10: 24 Maulwürfe, eine Sekunde Sichtzeit.'],
+    keys: [['Pfeile', 'Hammer bewegen'], ['Leertaste', 'hauen']] },
+  { name: 'Zielscheibe', make: makeZielscheibe, tint: '#ff5e7a',
+    rule: 'Führ das Fadenkreuz auf die schwebenden Scheiben und triff sie. Länger halten bewegt es schneller.',
+    notes: ['', 'Level 2: Kleinere, schnellere Scheiben.', 'Level 3: Zeitlimit: 13 Treffer in 52 Sekunden.', 'Level 4: Drei Scheiben gleichzeitig, schneller.', 'Level 5: Die Scheiben fliegen Kurven.', 'Level 6: Grüne Lotusblüten – nicht treffen, das kostet 5 Sekunden.', 'Level 7: Kleiner und schneller.', 'Level 8: Scheiben verschwinden nach kurzer Zeit wieder.', 'Level 9: Noch flüchtiger, 38 Sekunden.', 'Level 10: Winzige, schnelle Scheiben: 20 Treffer in 36 Sekunden.'],
+    keys: [['Pfeile', 'zielen'], ['Leertaste', 'schießen']] },
+  { name: 'Ausweichen', make: makeAusweichen, tint: '#ff7ad9',
+    rule: 'Weich den Kristallblöcken aus, indem du die Spur wechselst, und übersteh die ganze Strecke. Drei Zusammenstöße, und es geht von vorn los.',
+    notes: ['', 'Level 2: Schneller.', 'Level 3: Dichtere Reihen.', 'Level 4: Vier Spuren.', 'Level 5: Vier Spuren, schneller.', 'Level 6: Gelbe Blöcke rutschen kurz vor dir auf eine Nachbarspur.', 'Level 7: Fünf Spuren.', 'Level 8: Fünf Spuren, mehr Rutschblöcke.', 'Level 9: Höheres Tempo.', 'Level 10: Volle Geschwindigkeit.'],
+    keys: [['← →', 'Spur wechseln']] },
+  { name: 'Torwart', make: makeTorwart, tint: '#ffe36b',
+    rule: 'Halte die Schüsse: Lauf in die richtige Ecke und spring nur bei hohen Bällen. Drei Gegentore, und es geht von vorn los.',
+    notes: ['', 'Level 2: Schnellere, breiter gestreute Schüsse.', 'Level 3: Hohe Bälle – mit ↑ springen, bei flachen unten bleiben.', 'Level 4: 8 Paraden nötig, schnellere Schüsse.', 'Level 5: Effet – der Ball dreht im Flug zur Seite ab.', 'Level 6: Stärkerer Effet, 9 Paraden.', 'Level 7: Täuschungen – der Schütze bricht den Anlauf ab.', 'Level 8: Noch schärfere Schüsse.', 'Level 9: 11 Paraden, fast nur noch Ecken.', 'Level 10: 12 Paraden, Flugzeit unter einer Sekunde.'],
+    keys: [['← →', 'laufen'], ['↑', 'springen']] },
+  { name: 'Doppelblitz', make: makeDoppelblitz, tint: '#9d7bff',
+    rule: 'Links oder rechts blitzt ein Zeichen auf. Drück die Pfeiltaste, die die angezeigte Regel verlangt. Mehr als zwei Fehler, und es geht von vorn los.',
+    notes: ['', 'Level 2: Weniger Zeit zum Antworten.', 'Level 3: Regel FARBE: Grün = gleiche Seite, Blau = Gegenseite.', 'Level 4: Regel FORM: Kreis = ←, Quadrat = →, egal wo.', 'Level 5: FORM mit roten Zeichen – dann nichts drücken.', 'Level 6: Die Regel wechselt zwischen SEITE und FORM.', 'Level 7: Regelwechsel und rote Zeichen.', 'Level 8: Drei Regeln: SEITE, GEGENSEITE, FORM.', 'Level 9: Drei Regeln und rote Zeichen.', 'Level 10: Die Regel kann nach jedem Zeichen wechseln.'],
+    keys: [['← →', 'antworten']] },
+  { name: 'Pendel', make: makePendel, tint: '#ffd68a',
+    rule: 'Drück die Leertaste genau dann, wenn das Lichtpendel im rosa Feld steht. Viermal daneben, und es geht von vorn los.',
+    notes: ['', 'Level 2: Das Zielfeld wird schmaler.', 'Level 3: Schnelleres Pendel, 9 Treffer.', 'Level 4: Das Zielfeld springt nach jedem Treffer an eine neue Stelle.', 'Level 5: Schmaleres Feld, schnelleres Pendel.', 'Level 6: Das Tempo wechselt bei jeder Umkehr.', 'Level 7: 12 Treffer, noch schmaler.', 'Level 8: Das Zielfeld wandert hin und her.', 'Level 9: Schneller wandernd, 13 Treffer.', 'Level 10: 14 Treffer, schmalstes Feld.'],
+    keys: [['Leertaste', 'im Zielfeld drücken']] },
+  { name: 'Pong', make: makePong, tint: '#00f0ff',
+    rule: 'Schlag den Ball am Computer vorbei. Triffst du ihn mit dem Schlägerrand, fliegt er steiler. Wer zuerst genug Punkte hat, gewinnt.',
+    notes: ['', 'Level 2: Der Gegner wird flinker, dein Schläger kleiner.', 'Level 3: Schnellerer Ball.', 'Level 4: Spiel bis 4.', 'Level 5: Der Ball wird mit jedem Treffer schneller.', 'Level 6: Kleinerer Schläger, stärkerer Gegner.', 'Level 7: Spiel bis 5 – und Drall: Ein bewegter Schläger lässt den Ball kurven.', 'Level 8: Mehr Drall, schnellerer Gegner.', 'Level 9: Noch kleinerer Schläger.', 'Level 10: Der stärkste Gegner.'],
+    keys: [['↑ ↓', 'Schläger bewegen']] },
+  { name: 'Jongleur', make: makeJongleur, tint: '#8dff6b',
+    rule: 'Halte alle Bälle in der Luft. Jede Hand trägt nur einen Ball, also wirf ihn weiter, bevor der nächste landet, aber nie mit leerer Hand.',
+    notes: ['', 'Level 2: Schnellere, unregelmäßige Würfe.', 'Level 3: Drei Bälle.', 'Level 4: Drei Bälle, unregelmäßiger.', 'Level 5: Drei Bälle, schnell und kürzer halten.', 'Level 6: Vier Bälle.', 'Level 7: Vier Bälle, unregelmäßiger.', 'Level 8: Vier Bälle, schnell.', 'Level 9: Fünf Bälle!', 'Level 10: Fünf Bälle, schnell und unregelmäßig.'],
+    keys: [['←', 'linke Hand wirft'], ['→', 'rechte Hand wirft'], ['Leertaste', 'Hand, die länger hält']] },
+  { name: 'Zahlenreihe', make: makeZahlenreihe, tint: '#78dcff',
+    rule: 'Erkenne die Regel hinter der Zahlenfolge und wähle die nächste Zahl. Fünf richtige Antworten öffnen die Tür, drei Fehler und es geht von vorn los.',
+    notes: ['', 'Level 2: auch abwärts und Verdoppeln.', 'Level 3: Zickzack-Folgen.', 'Level 4: zwei verschachtelte Folgen und wachsende Abstände.', 'Level 5: Fibonacci-Folgen und Quadratzahlen.', 'Level 6: Kubikzahlen und abwechselnde Rechenarten, sechs Runden.', 'Level 7: Dreieckszahlen und „mal, dann plus“.', 'Level 8: Primzahlen und wachsende Faktoren.', 'Level 9: Summe der drei Zahlen davor, Abstände der Abstände.', 'Level 10: die schwersten Regeln gemischt.'],
+    keys: [['↑ → ↓ ←', 'Antwort wählen'], ['Leertaste', 'weiter nach einem Fehler']] },
+  { name: 'Hanoi', make: makeHanoi, tint: '#ffb36b',
+    rule: 'Bring den ganzen Scheibenturm auf den rechten Stab. Immer nur eine Scheibe bewegen und nie eine größere auf eine kleinere legen.',
+    notes: ['', 'Level 2: vier Scheiben.', 'Level 3: vier Scheiben, höchstens 20 Züge.', 'Level 4: fünf Scheiben, höchstens 38 Züge.', 'Level 5: Scheiben dürfen nur auf den Nachbarstab, höchstens 32 Züge.', 'Level 6: vier Stäbe, fünf Scheiben, höchstens 17 Züge.', 'Level 7: sechs Scheiben, höchstens 72 Züge.', 'Level 8: vier Stäbe, sechs Scheiben, höchstens 21 Züge.', 'Level 9: vier Stäbe, sieben Scheiben, höchstens 29 Züge.', 'Level 10: vier Stäbe, acht Scheiben, höchstens 37 Züge.'],
+    keys: [['← →', 'Stab wählen'], ['Leertaste / A', 'Scheibe nehmen / ablegen']] },
+  { name: 'Mini-Sudoku', make: makeMinisudoku, tint: '#c8372d',
+    rule: 'In jeder Zeile, jeder Spalte und jedem Kasten steht jede Zahl genau einmal. Jedes Rätsel hat genau eine Lösung.',
+    notes: ['', 'Level 2: nur neun Zahlen vorgegeben.', 'Level 3: sieben Zahlen vorgegeben.', 'Level 4: nur sechs Zahlen vorgegeben.', 'Level 5: 6×6 mit 2×3-Kästen, 24 Zahlen vorgegeben.', 'Level 6: 20 Zahlen vorgegeben.', 'Level 7: 17 Zahlen vorgegeben.', 'Level 8: 14 Zahlen vorgegeben.', 'Level 9: 12 Zahlen, Doppelte werden nicht mehr rot markiert.', 'Level 10: nur 11 Zahlen, keine Hilfe.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen'], ['Leertaste / A', 'Zahl hochzählen']] },
+  { name: 'Waage', make: makeWaage, tint: '#d9b45a',
+    rule: 'Alle Waagen sind im Gleichgewicht. Schließ daraus, wie viele Kreise die Formen auf der unteren Waage aufwiegen.',
+    notes: ['', 'Level 2: drei Formen.', 'Level 3: bis zu vier Formen pro Schale.', 'Level 4: Die Waagen sind gemischt bestückt.', 'Level 5: vier Formen.', 'Level 6: Ohne Waagen zu kombinieren geht es nicht mehr.', 'Level 7: Gefragt sind zwei Formen zusammen.', 'Level 8: fünf Formen.', 'Level 9: drei Formen zusammen auf der Frage-Waage.', 'Level 10: schwerere Gewichte.'],
+    keys: [['↑ → ↓ ←', 'Antwort wählen'], ['Leertaste', 'weiter nach einem Fehler']] },
+  { name: 'Wassergläser', make: makeWasserglaeser, tint: '#8dffd8',
+    rule: 'Gieß den Trank zwischen den Gläsern um, bis die Zielmenge abgemessen ist. Es fließt, bis ein Glas leer oder das andere voll ist.',
+    notes: ['', 'Level 2: genau 1 Liter.', 'Level 3: genau 7 Liter.', 'Level 4: genau 4 Liter.', 'Level 5: zweimal genau 4 Liter, höchstens 12 Züge.', 'Level 6: Gläser mit 10, 7 und 3 Litern.', 'Level 7: zweimal genau 5 Liter.', 'Level 8: Gläser mit 12, 7 und 5 Litern.', 'Level 9: vier Gläser, dreimal genau 4 Liter.', 'Level 10: vier Gläser mit 12, 11, 8 und 3 Litern.'],
+    keys: [['← →', 'Glas wählen'], ['Leertaste / A', 'aufnehmen / hineingießen']] },
+  { name: 'Mastermind', make: makeMastermind, tint: '#b98cff',
+    rule: 'Errate den verborgenen Farbcode. Gold heißt richtige Farbe am richtigen Platz, Silber richtige Farbe an einem anderen Platz.',
+    notes: ['', 'Level 2: drei Steine, fünf Farben.', 'Level 3: vier Steine, vier Farben.', 'Level 4: vier Steine, fünf Farben.', 'Level 5: sechs Farben, neun Versuche.', 'Level 6: Farben dürfen sich wiederholen.', 'Level 7: Wiederholungen, nur acht Versuche.', 'Level 8: fünf Steine, sechs Farben.', 'Level 9: fünf Steine, sieben Farben, Wiederholungen.', 'Level 10: fünf Steine, acht Farben, Wiederholungen.'],
+    keys: [['← →', 'Platz wählen'], ['↑ ↓', 'Farbe wechseln'], ['Leertaste / A', 'Reihe prüfen']] },
+  { name: 'Nonogramm', make: makeNonogramm, tint: '#46c6b0',
+    rule: 'Die Zahlen am Rand nennen die Längen der gefüllten Blöcke in jeder Zeile und Spalte. Füll die richtigen Felder, dann zeigt sich ein Bild.',
+    notes: ['', 'Level 2: noch ein Bild mit 5×5 Feldern.', 'Level 3: 6×6 Felder.', 'Level 4: 7×7 Felder.', 'Level 5: 8×8 Felder.', 'Level 6: 8×8, verzwickter.', 'Level 7: 9×9 Felder.', 'Level 8: 10×10 Felder.', 'Level 9: 10×10 mit vielen Lücken.', 'Level 10: 10×10, das letzte Bild.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen'], ['Leertaste / A', 'füllen / Kreuz / leeren'], ['Leertaste halten', 'malen']] },
+  { name: 'Parkplatz', make: makeParkplatz, tint: '#ff3b3b',
+    rule: 'Schieb die Autos vor und zurück, bis dein rotes Auto durch die Ausfahrt zur Tür fahren kann. Autos fahren nur geradeaus.',
+    notes: ['', 'Level 2: mindestens 5 Züge.', 'Level 3: mindestens 8 Züge.', 'Level 4: mindestens 10 Züge.', 'Level 5: voller Parkplatz, mindestens 13 Züge.', 'Level 6: mindestens 16 Züge.', 'Level 7: mindestens 19 Züge.', 'Level 8: mindestens 21 Züge.', 'Level 9: mindestens 23 Züge.', 'Level 10: mindestens 26 Züge.'],
+    keys: [['↑ ↓ ← →', 'Feld wählen / Auto schieben'], ['Leertaste / A', 'Auto greifen / loslassen']] },
+  { name: 'Nachzeichnen', make: makeNachzeichnen, tint: '#c4623a',
+    rule: 'Führe den Lichtpunkt genau die Linie entlang bis zur Tür. Neben der Linie verbraucht er Farbe – ist sie leer, beginnt alles von vorn.',
+    notes: ['Kurze, sanfte Linie, breiter Pfad.', 'Level 2: länger und kurviger.', 'Level 3: schmalerer Pfad.', 'Level 4: weniger Farbe für Abweichungen.', 'Level 5: Hinter dir brennt eine Zündschnur – bleib vor der Flamme.', 'Level 6: engere Kurven, schnellere Flamme.', 'Level 7: erste Schleifen.', 'Level 8: schmaler Pfad, wenig Farbe.', 'Level 9: lange, verschlungene Linie.', 'Level 10: schmalster Pfad, schnellste Flamme.'],
+    keys: [['↑ ↓ ← →', 'Lichtpunkt führen']] },
+  { name: 'Kugellabyrinth', make: makeKugellabyrinth, tint: '#d9a866',
+    rule: 'Kipp das Brett und roll die Kugel zur Tür. Fällt sie in ein Loch, geht es am letzten Leuchtring weiter.',
+    notes: ['Kleines Brett, ein Loch.', 'Level 2: mehr Gänge, zwei Löcher.', 'Level 3: Das erste Loch liegt direkt am Weg.', 'Level 4: größeres Labyrinth, Löcher in den Kurven.', 'Level 5: drei Löcher am Weg, das Brett kippt kräftiger.', 'Level 6: sieben Spalten, vier Löcher am Weg.', 'Level 7: fünf Reihen, fünf Löcher am Weg.', 'Level 8: acht Spalten, sechs Löcher am Weg.', 'Level 9: sieben Löcher am Weg.', 'Level 10: das größte Brett mit acht Löchern am Weg.'],
+    keys: [['↑ ↓ ← →', 'Brett kippen']] },
+  { name: 'Bogenschießen', make: makeBogenschiessen, tint: '#c8282a',
+    rule: 'Ziel mit ↑ ↓, spann den Bogen mit der Leertaste und lass los. Triff alle Scheiben, dann schieß einen Pfeil in die Tür.',
+    notes: ['Drei Scheiben, lange Flugbahn-Vorschau.', 'Level 2: kürzere Vorschau, kleinere Scheiben.', 'Level 3: Wind! Er dreht nach jedem Treffer.', 'Level 4: stärkerer Wind.', 'Level 5: kaum noch Vorschau.', 'Level 6: Zwei Scheiben schweben auf und ab.', 'Level 7: kleinere Scheiben, mehr Wind.', 'Level 8: Bambus steht im Weg.', 'Level 9: Scheiben ziehen auch seitwärts.', 'Level 10: zwei Bambusstangen, fünf bewegte Scheiben, stärkster Wind.'],
+    keys: [['↑ ↓', 'zielen'], ['Leertaste halten', 'spannen, loslassen schießt']] },
+  { name: 'Kran', make: makeKran, tint: '#e0b030',
+    rule: 'Fahr die Kiste über die leuchtende Säule und lass sie mit der Leertaste fallen. Sie pendelt am Seil – warte den richtigen Moment ab.',
+    notes: ['Zwei Kisten, breite Säulen.', 'Level 2: längeres Seil, schmalere Säulen.', 'Level 3: drei Kisten.', 'Level 4: Die Kiste pendelt länger nach.', 'Level 5: Wind treibt die Kiste ab.', 'Level 6: vier Kisten, stärkerer Wind.', 'Level 7: Ein Boot schaukelt hin und her – triff es trotzdem.', 'Level 8: schmalere Ziele, mehr Wind, schnelleres Boot.', 'Level 9: fünf Kisten, zwei Boote.', 'Level 10: langes Seil, kaum Dämpfung, stärkster Wind.'],
+    keys: [['← →', 'Laufkatze fahren'], ['Leertaste', 'Kiste fallen lassen']] },
+  { name: 'Höhlenflug', make: makeHoehlenflug, tint: '#3ff0c8',
+    rule: 'Halte ↑, damit das Glühwürmchen steigt, lass los, damit es sinkt. Berühr die Felsen nicht und flieg bis zur Tür.',
+    notes: ['Weite Höhle, gemächliches Tempo.', 'Level 2: enger und kurviger.', 'Level 3: länger und schneller.', 'Level 4: Tropfsteine ragen in den Gang.', 'Level 5: Engstellen.', 'Level 6: mehr Tropfsteine.', 'Level 7: schneller, steilere Windungen.', 'Level 8: noch enger.', 'Level 9: lange Höhle, viele Tropfsteine.', 'Level 10: Höchsttempo im engsten Gang.'],
+    keys: [['↑ halten', 'steigen'], ['↑ loslassen', 'sinken']] },
+  { name: 'Lenkdrachen', make: makeLenkdrachen, tint: '#ff5aa8',
+    rule: 'Der Drachen fliegt immer dorthin, wohin seine Nase zeigt. Dreh ihn durch alle Ringe und dann durch die Tür im Himmel, ohne ins Gras zu stürzen.',
+    notes: ['Vier Ringe, große Öffnung.', 'Level 2: fünf Ringe, etwas schneller.', 'Level 3: kleinere Ringe.', 'Level 4: Böen schieben den Drachen zur Seite.', 'Level 5: acht Ringe, stärkere Böen.', 'Level 6: Ein Vogel kreuzt den Himmel.', 'Level 7: Ringe am Rand des Windfensters, wo der Drachen langsam wird.', 'Level 8: elf Ringe, schneller Drachen.', 'Level 9: drei Vögel.', 'Level 10: dreizehn kleine Ringe, stärkste Böen.'],
+    keys: [['← →', 'Nase drehen'], ['↑', 'an der Leine ziehen (schneller)']] },
+  { name: 'Flipper', make: makeFlipper, tint: '#ff3ec8',
+    rule: 'Halte die Kugel mit den Flippern im Spiel und roll über alle Lichter. Dann öffnet sich die Tür.',
+    notes: ['Drei Lichter, fünf Kugeln.', 'Level 2: vier Lichter, schnellere Kugel.', 'Level 3: fünf Lichter.', 'Level 4: zwei Extra-Pilze, nur vier Kugeln.', 'Level 5: sechs Lichter, kürzere Flipper.', 'Level 6: Die Kugel kann jetzt durch die Mitte fallen.', 'Level 7: sieben Lichter, drei Kugeln – eine verlorene Kugel löscht alle Lichter.', 'Level 8: noch schnellere Kugel.', 'Level 9: acht Lichter.', 'Level 10: steilster Tisch, kürzeste Flipper.'],
+    keys: [['←', 'linker Flipper'], ['→', 'rechter Flipper'], ['Leertaste', 'durch die Tür']] },
+  { name: 'Mondlandung', make: makeMondlandung, tint: '#c9c6d8',
+    rule: 'Setz die Mondfähre sanft auf der beleuchteten Landefläche auf, dort wartet die Tür. Wer zu schnell sinkt oder daneben landet, macht Bruch.',
+    notes: ['Breite Landefläche, viel Treibstoff.', 'Level 2: ein Berg im Weg, schmalere Fläche.', 'Level 3: höherer Berg, strengeres Tempolimit.', 'Level 4: Wind treibt die Fähre ab, zwei Berge.', 'Level 5: stärkerer Wind, weniger Treibstoff.', 'Level 6: höhere Gipfel, schmale Fläche.', 'Level 7: Die Landefläche liegt in einem Tal, drei Gipfel.', 'Level 8: tieferes Tal, mehr Wind.', 'Level 9: knapper Treibstoff, steile Talwände.', 'Level 10: kleinste Fläche, stärkster Wind.'],
+    keys: [['↑', 'Hauptdüse'], ['← →', 'Seitendüsen']] }
+];
+/* ---------- Kategorien: der Kreis der Spiele ---------- */
+// Reihenfolge im Kreis im Uhrzeigersinn, innerhalb einer Kategorie grob von leicht nach schwer.
+const CATS = [
+  { id: 'reaktion', about: 'Wie schnell du auf das antwortest, was plötzlich geschieht.', name: 'Reaktion', color: '#ff3fa4', games: ['Blitz', 'Fangen', 'Flattern', 'Ballon', 'Abwehr', 'Froschweg', 'Ausbrechen', 'Takt', 'Maulwurf', 'Zielscheibe', 'Ausweichen', 'Torwart', 'Doppelblitz', 'Pendel', 'Pong', 'Jongleur'] },
+  { id: 'tempo', about: 'Wie zügig du Dinge erfasst, entscheidest und umsetzt.', name: 'Geschwindigkeit', color: '#ff8a1f', games: ['Der Flur', 'Symbolsuche', 'Sortieren', 'Rechenblitz', 'Labyrinth', 'Sprung', 'Schlange', 'Lavaturm', 'Mehr oder weniger', 'Kartenschnipp', 'Pfeilsturm', 'Treppensprint', 'Punktezählen', 'Buchstabenjagd', 'Wettrennen', 'Slalom'] },
+  { id: 'gedaechtnis', about: 'Wie viel du dir merken und im Kopf behalten kannst.', name: 'Gedächtnis', color: '#9b6bff', games: ['Memory', 'Farbfolge', 'Zahlenspanne', 'Positionen', 'Sternenpfad', 'Klangschalen', 'Veränderung', 'Zurück', 'Wiedersehen', 'Einkaufsliste', 'Reihenfolge', 'Zuordnung', 'Schattenbild', 'Muster', 'Wegbeschreibung', 'Rhythmus'] },
+  { id: 'logik', about: 'Wie du Rätsel durchdenkst, planst und Regeln erkennst.', name: 'Logik', color: '#2fd4a5', games: ['Eisbahn', 'Lichter', 'Röhren', 'Schiebepuzzle', 'Schlüsselraum', 'Laser', 'Zwillinge', 'Zeitschleife', 'Zahlenreihe', 'Hanoi', 'Mini-Sudoku', 'Waage', 'Wassergläser', 'Mastermind', 'Nonogramm', 'Parkplatz'] },
+  { id: 'koordination', about: 'Wie fein du Bewegung, Kraft und Timing abstimmst.', name: 'Koordination', color: '#ffd23f', games: ['Angeln', 'Stapeln', 'Balance', 'Minigolf', 'Farbwechsel', 'Umkehr', 'Liane', 'Schwerelos', 'Nachzeichnen', 'Kugellabyrinth', 'Bogenschießen', 'Kran', 'Höhlenflug', 'Lenkdrachen', 'Flipper', 'Mondlandung'] },
+  { id: 'fokus', about: 'Wie du Wichtiges von Unwichtigem trennst und dranbleibst.', name: 'Aufmerksamkeit', color: '#3fb8ff', games: ['Fokus', 'Ausreißer', 'Dunkelheit', 'Wächter', 'Stillstand', 'Bomben', 'Blöcke', 'Verteidigung', 'Hütchenspiel', 'Flanker', 'Unterschiede', 'Zählwerk', 'Verfolgen', 'Leuchtturm', 'Uhrwache', 'Doppelspur'] }
+];
+const GAMES = CATS.flatMap(cat => cat.games.map(name => {
+  const w = WORLDS.find(x => x.name === name);
+  return { ...w, id: w.make.name, cat: cat.id };
+}));
+const catOf = g => CATS.find(c => c.id === g.cat);
+
+/* ---------- Fortschritt: pro Spiel die Zahl gemeisterter Level ---------- */
+const LEVELS = 10;
+const progress = {};
+try { Object.assign(progress, JSON.parse(localStorage.getItem('tueren.kreis') || '{}')); } catch (e) {}
+const saveProgress = () => { try { localStorage.setItem('tueren.kreis', JSON.stringify(progress)); } catch (e) {} };
+const doneOf = gi => progress[GAMES[gi].id] || 0;
+
+/* ---------- Ablauf: Kreis -> Intro -> Spielen -> durch die Tür -> zurück in den Kreis ---------- */
+let gi = 0, li = 0, world = null, phase = 'map', pt = 0, doorR = null;
+const stage = document.getElementById('stage'), mapCv = document.getElementById('map');
+const btnKreis = document.getElementById('btnKreis'), btnKlang = document.getElementById('btnKlang'), btnSonde = document.getElementById('btnSonde');
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+
+function renderSkills() {
+  $('skills').innerHTML = CATS.map(cat => {
+    let d = 0, n = 0; GAMES.forEach((g, i) => { if (g.cat === cat.id) { d += doneOf(i); n += LEVELS; } });
+    return `<b style="--c:${cat.color}">${cat.name}</b><i style="--c:${cat.color};--w:${Math.round(d / n * 100)}%"></i><em>${d}/${n} · ${SONDE_SYSTEME[cat.id]} ${Math.floor(d / 10)}</em>`;
+  }).join('');
+}
+function renderInfo(g, l, inGame) {
+  const gm = GAMES[g], cat = catOf(gm), done = doneOf(g);
+  const info = document.querySelector('.info'); info.style.setProperty('--cat', cat.color);
+  $('wnum').textContent = `${cat.name} · trainiert ${cat.ship} · Level ${l + 1} von ${LEVELS}`; $('wnum').style.color = cat.color;
+  $('wname').textContent = gm.name;
+  $('wrule').textContent = gm.rule + (gm.notes?.[l] ? ' ' + gm.notes[l] : '');
+  $('levels').innerHTML = Array.from({ length: LEVELS }, (_, k) => k).map(k => `<span class="${k < done ? 'done' : k === done ? 'open' : ''}">Level ${k + 1} ${k < done ? '✓' : k === done ? '· offen' : '· gesperrt'}</span>`).join('');
+  const keyList = inGame ? gm.keys.concat(gm.keys.some(([k]) => k === 'R') ? [] : [['R', 'Level neu starten']], [['Esc / M', 'zurück zum Kreis']])
+    : [['← →', 'Spiel wählen'], ['↑ ↓', 'Level wählen (außen = schwerer)'], ['Leertaste', 'spielen'], ['Esc / Mitte', 'zurück zur Übersicht']];
+  $('wkeys').innerHTML = keyList.map(([k, d]) => `<kbd>${esc(k)}</kbd><span>${esc(d)}</span>`).join('');
+  renderSkills();
+}
+CATS.forEach(c => { c.ship = SONDE_SYSTEME[c.id]; });
+const kreis = makeKreis(mapCv, {
+  cats: CATS, games: GAMES, progress, levels: LEVELS,
+  onSelect: (g, l) => renderInfo(g, l, false),
+  onCategory: c => renderCategory(c),
+  onPlay: (g, l) => startLevel(g, l)
+});
+// Info-Leiste in der Übersicht: Beschreibung der Kategorie und ihre Spiele
+function renderCategory(c) {
+  const cat = CATS[c], info = document.querySelector('.info'); info.style.setProperty('--cat', cat.color);
+  let d = 0; GAMES.forEach((g, i) => { if (g.cat === cat.id) d += doneOf(i); });
+  $('wnum').textContent = `Kategorie · ${d} von ${cat.games.length * LEVELS} Leveln`; $('wnum').style.color = cat.color;
+  $('wname').textContent = cat.name;
+  $('wrule').textContent = `${cat.about} Trainiert am Schiff: ${cat.ship}, Stufe ${Math.floor(d / 10)} – ${SONDE_SYSTEM_TEXT[cat.id]}. Alle 10 geschafften Level gibt es eine Stufe mehr.`;
+  $('levels').innerHTML = GAMES.map((g, i) => g.cat === cat.id ? `<span class="${doneOf(i) === LEVELS ? 'done' : doneOf(i) ? 'open' : ''}">${esc(g.name)} ${doneOf(i)}/${LEVELS}</span>` : '').join('');
+  $('wkeys').innerHTML = [['← →', 'Kategorie wählen'], ['Leertaste / ↑', 'Kategorie öffnen'], ['Maus / Touch', 'Sektor antippen']].map(([k, t]) => `<kbd>${esc(k)}</kbd><span>${esc(t)}</span>`).join('');
+  renderSkills();
+}
+
+function showMap() {
+  phase = 'map'; stage.classList.add('kreis'); mapCv.hidden = false; cv.hidden = true; btnKreis.hidden = true; btnSonde.hidden = false; sondeUi(false);
+  $('tag').textContent = 'Der Kreis der Spiele trainiert die Sonde. Zehn Ringe: innen leicht, außen schwer.';
+  Klang.setLevel(1);
+  if (kreis.mode() === 'cat') { const s = kreis.sel(); renderInfo(s.g, s.l, false); } else renderCategory(kreis.cat());
+}
+function startLevel(g, l) {
+  gi = g; li = l; world = GAMES[g].make(catOf(GAMES[g]).color, l);
+  phase = 'intro'; pt = 0;
+  stage.classList.remove('kreis'); mapCv.hidden = true; cv.hidden = false; btnKreis.hidden = false; btnKreis.textContent = '◎ Zum Kreis'; btnSonde.hidden = true; sondeUi(false);
+  Klang.setLevel(GAMES[g].name === 'Takt' ? 0 : 0.35);
+  renderInfo(g, l, true);
+}
+btnKreis.addEventListener('click', () => { showMap(); btnKreis.blur(); });
+btnSonde.addEventListener('click', () => { showRaum(); btnSonde.blur(); });
+
+/* ---------- Die Sonde im All ---------- */
+const skillOf = id => GAMES.reduce((a, g, i) => a + (g.cat === id ? doneOf(i) : 0), 0);
+const raum = makeRaum({ cats: CATS, skill: skillOf, onKreis: () => showMap() });
+let raumUiT = 0;
+function sondeUi(on) { document.body.classList.toggle('raum', on); $('sondeBtns').hidden = !on; $('slog').hidden = !on; $('snetz').hidden = !on; }
+function showRaum() {
+  phase = 'raum'; stage.classList.remove('kreis'); mapCv.hidden = true; cv.hidden = false;
+  btnKreis.hidden = false; btnKreis.textContent = '◎ Kreis der Spiele'; btnSonde.hidden = true; sondeUi(true);
+  $('tag').textContent = 'Eine Von-Neumann-Sonde. Ihr Geist trainiert im Kreis der Spiele.';
+  Klang.setLevel(0.75); raum.enter(); renderRaum(true);
+}
+function renderRaum(full) {
+  const st = raum.status(), info = document.querySelector('.info'); info.style.setProperty('--cat', '#7dffb0');
+  $('wnum').textContent = `Sonde · ${st.sys}`; $('wnum').style.color = '#7dffb0';
+  $('wname').textContent = 'Von-Neumann-Sonde';
+  const k = st.kosten, L = st.lager;
+  $('wrule').textContent = `Netz: ${st.netz} von ${st.total} Systemen, ${st.klone} Klone. Netzlager: ${Math.floor(L.metall)} Metall, ${Math.floor(L.kristall)} Kristall, ${Math.floor(L.credits)} Credits. `
+    + `Replizieren kostet ${k.metall} Metall, ${k.kristall} Kristall und ${k.fuel} Treibstoff. `
+    + `Waffe: ${st.waffe.name} (${st.waffe.text}). Freigeschaltet: ${st.waffen.map(x => x.name).join(', ')}.`;
+  $('slog').innerHTML = st.log.slice().reverse().map(e => `<p style="--c:${e.col}">${esc(e.text)}</p>`).join('');
+  const RF = { bergbau: '#ffd23f', handel: '#2fd4a5', wache: '#ff6b9a', pionier: '#9b6bff' };
+  const netzHtml = `<table><caption>Netz · alle Sonden</caption><tr><th>Nr</th><th>Name</th><th>System</th><th>Aufgabe</th><th>Leistung</th></tr>`
+    + `<tr><td>1</td><td>Du</td><td>${esc(st.sys)}</td><td class="r" style="--c:#ffd86b">Original</td><td>Hülle ${Math.ceil(st.hull)} · Fracht ${st.used}/${st.fracht}</td></tr>`
+    + st.nodes.map(n => `<tr><td>${n.nr}</td><td title="${esc(n.macke)}">${esc(n.name)}</td><td>${esc(n.sysName)} ${'●'.repeat(n.danger)}</td><td class="r" style="--c:${RF[n.rolle]}">${SONDE_ROLLEN[n.rolle].name}</td><td>${esc(n.leistung)}</td></tr>`).join('') + '</table>';
+  if ($('snetz').dataset.html !== netzHtml) { $('snetz').innerHTML = netzHtml; $('snetz').dataset.html = netzHtml; }
+  if (!full) return;
+  const wv = raum.werte();
+  $('levels').innerHTML = CATS.map(c => `<span class="sys" style="--c:${c.color}">${SONDE_SYSTEME[c.id]} · Stufe ${wv.stufe[c.id]}</span>`).join('');
+  $('wkeys').innerHTML = [['← →', 'drehen'], ['↑ / ↓', 'Schub / bremsen'], ['Leertaste', 'schießen'], ['Q', 'Waffe wechseln'], ['E', 'andocken'], ['B', 'replizieren'], ['G', 'Sternenkarte'], ['N', 'Netz: alle Sonden'], ['K', 'Kreis der Spiele: Upgrades'], ['Esc', 'Fenster schließen']]
+    .map(([a, b]) => `<kbd>${esc(a)}</kbd><span>${esc(b)}</span>`).join('');
+  renderSkills();
+}
+btnKlang.addEventListener('click', () => { const on = Klang.toggle(); btnKlang.setAttribute('aria-pressed', on ? 'true' : 'false'); btnKlang.textContent = on ? '♪ Klang aus' : '♪ Klang an'; btnKlang.blur(); });
+
+function update(dt) {
+  if (phase === 'raum') { raum.update(dt); raumUiT -= dt; if (raumUiT <= 0 && phase === 'raum') { raumUiT = 0.5; renderRaum(false); } }
+  else if (phase === 'map') { if (pressed.kreis) showRaum(); else kreis.update(dt); }
+  else if (pressed.menu) showMap();
+  else if (phase === 'play') {
+    stats.time += dt;
+    if (pressed.reset) world = GAMES[gi].make(catOf(GAMES[gi]).color, li);
+    world.update(dt);
+    if (world.done) { phase = 'enter'; pt = 0; doorR = world.door(); }
+  } else if (phase === 'intro') {
+    pt += dt;
+    if (pt > 2.2 || (pt > 0.5 && Object.keys(pressed).length)) phase = 'play';
+  } else if (phase === 'enter') {
+    pt += dt / 1.1;
+    if (pt >= 1) {
+      const id = GAMES[gi].id, first = (progress[id] || 0) <= li;
+      progress[id] = Math.max(progress[id] || 0, li + 1); saveProgress();
+      kreis.enterCat(CATS.findIndex(c => c.id === GAMES[gi].cat)); kreis.select(gi, Math.min(li + 1, LEVELS - 1)); showMap();
+      if (first) kreis.ignite(gi, li);
+    }
+  }
+  Klang.tick();
+  for (const k in pressed) delete pressed[k];
+}
+
+function draw() {
+  if (phase === 'map') return kreis.draw();
+  if (phase === 'raum') { ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; return raum.draw(ctx); }
+  ctx.setTransform(2, 0, 0, 2, 0, 0);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  const col = catOf(GAMES[gi]).color;
+  if (phase === 'enter') {
+    const c = center(doorR), s = 1 + Math.pow(pt, 2.4) * 16;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.scale(s, s); ctx.translate(-c.x, -c.y);
+    world.draw(ctx); ctx.restore();
+    ctx.globalAlpha = clamp((pt - 0.35) / 0.5, 0, 1); ctx.fillStyle = col; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = clamp((pt - 0.8) / 0.2, 0, 1); ctx.fillStyle = '#05030b'; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  world.draw(ctx);
+  if (phase === 'intro') {
+    const gm = GAMES[gi], fadeIn = clamp(1 - pt / 0.5, 0, 1), card = clamp(pt < 1.7 ? 1 : 1 - (pt - 1.7) / 0.5, 0, 1);
+    ctx.fillStyle = `rgba(0,0,0,${Math.max(fadeIn, card * 0.6)})`; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = card; ctx.textAlign = 'center'; ctx.fillStyle = col;
+    ctx.font = '600 13px "IBM Plex Mono", monospace'; ctx.fillText(`${catOf(gm).name.toUpperCase()}  ·  LEVEL ${li + 1} / ${LEVELS}`, W / 2, H / 2 - 34);
+    ctx.fillStyle = '#fff'; ctx.font = '36px Bungee, "Arial Black", sans-serif'; ctx.fillText(gm.name.toUpperCase(), W / 2, H / 2 + 8);
+    ctx.font = '13px "IBM Plex Mono", monospace'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    const text = li > 0 && gm.notes?.[li] ? gm.notes[li] : gm.rule;
+    let line = '', y = H / 2 + 40; // Zeilenumbruch bei langen Texten
+    for (const word of text.split(' ')) { if (ctx.measureText(line + word).width > 560 && line) { ctx.fillText(line.trim(), W / 2, y); line = ''; y += 18; } line += word + ' '; }
+    ctx.fillText(line.trim(), W / 2, y);
+    ctx.globalAlpha = 1; ctx.textAlign = 'left';
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  update(dt); draw();
+  requestAnimationFrame(frame);
+}
+
+function start(data) {
+  // Beim ersten Besuch steht die Auswahl auf dem ersten Spiel, sonst auf dem zuletzt gewählten
+  kreis.select(clamp(data?.gi ?? 0, 0, GAMES.length - 1), clamp(data?.li ?? 0, 0, LEVELS - 1));
+  if (data?.cat) kreis.enterCat(CATS.findIndex(c => c.id === GAMES[data.gi].cat));
+  if (data?.map) showMap(); else showRaum();
+  requestAnimationFrame(frame);
+}
+window.claude?.hot?.snapshot?.(() => { raum.save(); return { gi: kreis.sel().g, li: kreis.sel().l, cat: kreis.mode() === 'cat', map: phase !== 'raum' }; });
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+<script>
+  // Offline-Speicher: Beim ersten Start werden alle Dateien zwischengespeichert
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

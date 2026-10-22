@@ -1,0 +1,30 @@
+{
+  "name": "Türen – Kreis der Spiele",
+  "short_name": "Türen",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111217",
+  "theme_color": "#111217",
+  "description": "Eine Von-Neumann-Sonde im All, trainiert im Kreis der Spiele: 96 Spiele mit je 10 Leveln.",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
